@@ -23,6 +23,17 @@ export const readyFighterIds = (): string[] => {
     .map((pack) => pack.id as string);
 };
 
+/** Ids of every ready stage pack, in pack order. */
+export const readyStageIds = (): string[] => {
+  const root = join(process.cwd(), "stages");
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => JSON.parse(readFileSync(join(root, entry.name, "stage.json"), "utf8")))
+    .filter((pack) => pack.status === "ready")
+    .sort((left, right) => left.order - right.order)
+    .map((pack) => pack.id as string);
+};
+
 /** Collects uncaught errors, console errors and failed asset requests. */
 export const trackProblems = (page: Page): string[] => {
   const problems: string[] = [];

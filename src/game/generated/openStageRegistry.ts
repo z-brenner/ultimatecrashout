@@ -3,9 +3,14 @@ import stage0PreviewUrl from "../../../stages/verdant-grove/assets/preview.png?u
 import stage0ThumbnailUrl from "../../../stages/verdant-grove/assets/preview.thumb.webp?url";
 import stage0ArenaUrl from "../../../stages/verdant-grove/assets/arena.webp?url";
 import stage0BackdropUrl from "../../../stages/verdant-grove/assets/backdrop.webp?url";
+import stage1PreviewUrl from "../../../stages/crash-course/assets/preview.png?url";
+import stage1ThumbnailUrl from "../../../stages/crash-course/assets/preview.thumb.webp?url";
+import stage1ArenaUrl from "../../../stages/crash-course/assets/arena.webp?url";
+import stage1BackdropUrl from "../../../stages/crash-course/assets/backdrop.webp?url";
 
 export const OPEN_STAGE_IDS = [
-  "verdant-grove"
+  "verdant-grove",
+  "crash-course"
 ] as const;
 export const DEFAULT_STAGE_ID = OPEN_STAGE_IDS[0];
 export const OPEN_STAGE_PACKS = [
@@ -115,6 +120,114 @@ export const OPEN_STAGE_PACKS = [
       "thumbnailUrl": stage0ThumbnailUrl,
       "arenaUrl": stage0ArenaUrl,
       "backdropUrl": stage0BackdropUrl
+    }
+  },
+  {
+    "$schema": "../stage.schema.json",
+    "schemaVersion": 1,
+    "status": "ready",
+    "id": "crash-course",
+    "order": 20,
+    "identity": {
+      "displayName": "Crash Course",
+      "series": "Ultimate Crashout",
+      "description": "A wide crash-test hangar floor with three suspended hazard platforms"
+    },
+    "gameplay": {
+      "platforms": [
+        {
+          "id": "main",
+          "x": 0,
+          "y": -96,
+          "width": 1500,
+          "height": 192,
+          "kind": "ground"
+        },
+        {
+          "id": "left",
+          "x": -340,
+          "y": 168,
+          "width": 280,
+          "height": 24,
+          "kind": "platform"
+        },
+        {
+          "id": "right",
+          "x": 340,
+          "y": 168,
+          "width": 280,
+          "height": 24,
+          "kind": "platform"
+        },
+        {
+          "id": "top",
+          "x": 0,
+          "y": 330,
+          "width": 300,
+          "height": 24,
+          "kind": "platform"
+        }
+      ],
+      "ledges": [
+        {
+          "platformId": "main",
+          "side": "left"
+        },
+        {
+          "platformId": "main",
+          "side": "right"
+        }
+      ],
+      "spawns": [
+        {
+          "x": -200,
+          "y": 60
+        },
+        {
+          "x": 200,
+          "y": 60
+        }
+      ],
+      "blastZone": {
+        "left": -1320,
+        "right": 1320,
+        "top": 1100,
+        "bottom": -780
+      }
+    },
+    "render": {
+      "kind": "2d",
+      "preview": "assets/preview.png",
+      "thumbnail": "assets/preview.thumb.webp",
+      "arena": "assets/arena.webp",
+      "backdrop": "assets/backdrop.webp",
+      "art": {
+        "width": 1920,
+        "height": 1080,
+        "originPx": {
+          "x": 960,
+          "y": 640
+        },
+        "worldUnitsPerPixel": 0.9
+      }
+    },
+    "colors": {
+      "edge": "#f6c41a",
+      "surface": "#8a9cb2",
+      "body": "#2c3646",
+      "shadow": "#16161c"
+    },
+    "license": {
+      "attribution": "Crash Course — original Ultimate Crashout stage (procedural, scripts/starter_stage)",
+      "sourcePage": "https://github.com/z-brenner/ultimatecrashout",
+      "id": "CC0-1.0",
+      "url": "https://creativecommons.org/publicdomain/zero/1.0/"
+    },
+    "runtime": {
+      "previewUrl": stage1PreviewUrl,
+      "thumbnailUrl": stage1ThumbnailUrl,
+      "arenaUrl": stage1ArenaUrl,
+      "backdropUrl": stage1BackdropUrl
     }
   }
 ] as const;

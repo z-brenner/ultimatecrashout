@@ -10,10 +10,15 @@ under `src/`.
 
 ```sh
 npm run stage:new -- my-stage --kind 2d
-# complete stages/my-stage/stage.json and add the assets
-npm run stage:build
+# complete stage.json and PROVENANCE.md, add preview.png, arena.webp, backdrop.webp
+npm run stage:build -- my-stage   # derives preview.thumb.webp and SHA256SUMS
 npm run stage:check
 ```
+
+`stage:build -- <id>` needs `cwebp` (see `npm run content:doctor`). Without an
+id, `stage:build` only re-syncs the registry. [`crash-course`](crash-course/)
+is a complete original reference pack; its art is drawn by
+`scripts/starter_stage/generate_crash_course.py`.
 
 A draft is intentionally excluded from the game. The build still requires at
 least one other `ready` pack because a match always needs a default stage.
@@ -74,5 +79,6 @@ verifying the source license.
 
 ```sh
 npm run stage:build  # validate and regenerate openStageRegistry.ts
+npm run stage:build -- <id>  # also derive that pack's thumbnail and SHA256SUMS
 npm run stage:check  # also verify that the registry is not stale
 ```

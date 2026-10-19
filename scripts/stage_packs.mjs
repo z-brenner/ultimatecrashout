@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   access,
@@ -373,7 +374,48 @@ const scaffold = async () => {
   console.log(`Draft stage pack created: ${destination}`);
 };
 
+/**
+ * Regenerates the derived files of one pack before validation: the 512x288
+ * WebP thumbnail from preview.png and SHA256SUMS for every render asset.
+ * The author still writes PROVENANCE.md; checksums only prove integrity.
+ */
+const refreshPackAssets = async (id) => {
+  assert(ID_PATTERN.test(id), `Invalid stage id: ${id}`);
+  const directory = join(packRoot, id);
+  const pack = await readJson(join(directory, "stage.json")).catch(() => fail(`Stage pack not found: ${id}`));
+  const render = pack.render ?? {};
+  const inside = (assetPath, label) => {
+    assert(nonEmpty(assetPath), `${id}: render.${label} is missing`);
+    const absolute = resolve(directory, assetPath);
+    assert(absolute.startsWith(`${directory}${sep}`), `${id}: render.${label} escapes the stage pack`);
+    return absolute;
+  };
+  const preview = inside(render.preview, "preview");
+  const thumbnail = inside(render.thumbnail, "thumbnail");
+  await access(preview).catch(() => fail(`${id}: ${render.preview} is missing`));
+  for (const tool of ["cwebp"]) {
+    assert(spawnSync(tool, ["-version"], { stdio: "ignore" }).status === 0,
+      `${tool} is required to build stage thumbnails (run npm run content:doctor)`);
+  }
+  const encoded = spawnSync("cwebp", [
+    "-quiet", "-q", "82", "-metadata", "none", "-resize", "512", "288", preview, "-o", thumbnail,
+  ], { encoding: "utf8" });
+  assert(encoded.status === 0, `${id}: thumbnail encoding failed\n${encoded.stderr ?? ""}`);
+  const assets = [render.preview, render.thumbnail, render.arena, render.backdrop, render.scene?.file]
+    .filter(nonEmpty);
+  const lines = [];
+  for (const assetPath of [...new Set(assets)].sort()) {
+    const absolute = inside(assetPath, assetPath);
+    const bytes = await readFile(absolute).catch(() => fail(`${id}: ${assetPath} is missing`));
+    lines.push(`${createHash("sha256").update(bytes).digest("hex")}  ${assetPath}`);
+  }
+  await writeFile(join(directory, "SHA256SUMS"), `${lines.join("\n")}\n`);
+  console.log(`${id}: thumbnail and SHA256SUMS regenerated (${lines.length} files).`);
+};
+
 const build = async () => {
+  const requestedId = args.find((argument) => !argument.startsWith("--"));
+  if (requestedId) await refreshPackAssets(requestedId);
   const loaded = await loadPacks();
   await writeAtomic(registryOut, generatedRegistry(loaded));
   const ready = loaded.filter(({ pack }) => pack.status === "ready").length;
@@ -394,6 +436,7 @@ const help = () => {
   console.log(`Stage pack commands:
   npm run stage:new -- <id> --kind 2d|3d
   npm run stage:build
+  npm run stage:build -- <id>   # also regenerate its thumbnail and SHA256SUMS
   npm run stage:check`);
 };
 

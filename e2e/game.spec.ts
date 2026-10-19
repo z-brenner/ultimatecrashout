@@ -3,6 +3,7 @@ import {
   fighters,
   holdKey,
   readyFighterIds,
+  readyStageIds,
   trackProblems,
   waitForPlaying,
 } from "./helpers";
@@ -38,6 +39,34 @@ test.describe("menus", () => {
     await expect.poll(() => page.locator(".cc-fighter-card img").evaluateAll((images) =>
       images.every((image) => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0),
     )).toBe(true);
+    expect(problems).toEqual([]);
+  });
+});
+
+test.describe("stage select", () => {
+  test("lists every ready stage pack and starts a match on the chosen one", async ({ page }) => {
+    const problems = trackProblems(page);
+    await page.goto("/");
+    await page.locator("[data-ui-action='boot-skip']").click();
+    await expect(page.locator("[data-ui-action='title-start']")).toBeVisible();
+    await page.keyboard.press("Enter");
+    await page.locator("[data-ui-action='home-play']").click();
+    await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='0']").click();
+    await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='1']").click();
+    await page.locator("[data-ui-action='open-stage-select']").click();
+
+    const cards = page.locator("[data-ui-action='select-stage']");
+    const expected = readyStageIds();
+    expect(expected.length).toBeGreaterThan(1);
+    expect(await cards.evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.stage)))
+      .toEqual(expected);
+    const last = expected.at(-1)!;
+    await page.locator(`[data-ui-action='select-stage'][data-stage='${last}']`).click();
+    await page.locator("[data-ui-action='stage-confirm']").click();
+    await waitForPlaying(page);
+    expect(await page.evaluate((api) =>
+      (window as unknown as Record<string, { getSnapshot(): { stage: { id: string } } }>)[api]!.getSnapshot().stage.id,
+    "__ULTIMATE_CRASHOUT__")).toBe(last);
     expect(problems).toEqual([]);
   });
 });
