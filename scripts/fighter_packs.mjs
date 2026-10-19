@@ -9,7 +9,7 @@ import {
   rename,
   writeFile,
 } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -262,6 +262,123 @@ const validateReadyPack = (pack, render, config) => {
   }
 };
 
+// Fallback chain for slots a sprite-strip pack does not provide yet. Each
+// missing slot borrows the first available strip in its chain, then idle.
+const SPRITE_STRIP_FALLBACKS = {
+  crouch: ["idle"],
+  walk: ["run"],
+  turn: ["idle"],
+  dash: ["run", "walk"],
+  run: ["walk", "dash"],
+  jump_squat: ["crouch"],
+  jump: ["double_jump", "fall"],
+  double_jump: ["jump"],
+  fall: ["jump"],
+  fast_fall: ["fall", "jump"],
+  jab: ["forward_tilt"],
+  dash_attack: ["forward_tilt", "jab"],
+  forward_tilt: ["jab"],
+  up_tilt: ["up_air", "jab"],
+  down_tilt: ["jab"],
+  forward_smash: ["forward_tilt", "jab"],
+  up_smash: ["up_tilt", "up_air", "jab"],
+  down_smash: ["down_tilt", "jab"],
+  neutral_air: ["jab"],
+  forward_air: ["neutral_air", "forward_tilt", "jab"],
+  back_air: ["neutral_air", "jab"],
+  up_air: ["up_tilt", "neutral_air", "jab"],
+  down_air: ["neutral_air", "jab"],
+  neutral_special: ["jab"],
+  side_special: ["forward_tilt", "jab"],
+  up_special: ["up_air", "jump"],
+  down_special: ["down_tilt", "jab"],
+  spot_dodge: ["shield", "crouch"],
+  roll_forward: ["dash", "run"],
+  roll_back: ["roll_forward", "dash", "run"],
+  air_dodge: ["fall", "jump"],
+  shield: ["crouch"],
+  item_hold: ["idle"],
+  item_pickup: ["crouch"],
+  item_attack: ["forward_tilt", "jab"],
+  grab: ["jab"],
+  grab_hold: ["grab"],
+  grabbed: ["hurt"],
+  forward_throw: ["grab", "forward_tilt"],
+  back_throw: ["forward_throw", "grab"],
+  up_throw: ["forward_throw", "grab"],
+  down_throw: ["forward_throw", "grab"],
+  hurt: ["knockback"],
+  knockback: ["hurt"],
+  downed: ["hurt", "knockback"],
+  ledge: ["fall", "jump"],
+  entrance: ["idle"],
+  taunt: ["victory"],
+  victory: ["taunt"],
+};
+
+const resolveStripFallback = (slot, available, visited = new Set()) => {
+  if (available.has(slot)) return slot;
+  visited.add(slot);
+  for (const candidate of SPRITE_STRIP_FALLBACKS[slot] ?? []) {
+    if (visited.has(candidate)) continue;
+    const resolved = resolveStripFallback(candidate, available, visited);
+    if (resolved) return resolved;
+  }
+  return available.has("idle") ? "idle" : null;
+};
+
+/**
+ * Expands render.spriteStrips (one horizontal PNG strip per animation slot in a
+ * folder inside the pack) into the explicit actions/slots form consumed by the
+ * 2D atlas builder. Explicit actions/slots in render.json are left untouched.
+ */
+const expandSpriteStrips = async (render, directory, slotNames) => {
+  const strips = render.spriteStrips;
+  if (strips === undefined) return render;
+  const id = render.displayName ?? directory;
+  assert(isObject(strips), `${id}: spriteStrips must be an object`);
+  assert(render.actions === undefined && render.slots === undefined,
+    `${id}: use either spriteStrips or actions/slots in render.json, not both`);
+  assert(nonEmpty(strips.directory), `${id}: spriteStrips.directory is missing`);
+  assert(positiveInteger(strips.frameWidth) && positiveInteger(strips.frameHeight),
+    `${id}: spriteStrips.frameWidth and frameHeight must be positive integers`);
+  const absoluteDirectory = resolve(directory, strips.directory);
+  assert(absoluteDirectory.startsWith(`${directory}/`) || absoluteDirectory === directory,
+    `${id}: spriteStrips.directory must stay inside the fighter pack`);
+  let files;
+  try {
+    files = await readdir(absoluteDirectory);
+  } catch {
+    fail(`${id}: spriteStrips.directory ${strips.directory} does not exist`);
+  }
+  const slotSet = new Set(slotNames);
+  const unknown = files.filter((name) => name.endsWith(".png") && !slotSet.has(name.slice(0, -4)));
+  assert(unknown.length === 0, `${id}: unknown sprite strip(s) ${unknown.join(", ")}; name files after animation slots`);
+  const available = new Set(files.filter((name) => name.endsWith(".png")).map((name) => name.slice(0, -4)));
+  assert(available.has("idle"), `${id}: spriteStrips requires at least idle.png`);
+  const frameSizes = isObject(strips.frameSizes) ? strips.frameSizes : {};
+  const fps = isObject(strips.fps) ? strips.fps : {};
+  const relativeDirectory = relative(projectRoot, absoluteDirectory).split(sep).join("/");
+  const actions = {};
+  for (const slot of slotNames.filter((name) => available.has(name))) {
+    const size = frameSizes[slot] ?? {};
+    actions[slot] = {
+      type: "strip",
+      sheet: `${relativeDirectory}/${slot}.png`,
+      frameWidth: size.frameWidth ?? strips.frameWidth,
+      frameHeight: size.frameHeight ?? strips.frameHeight,
+      ...(positive(fps[slot]) ? { fps: fps[slot] } : {}),
+    };
+  }
+  const slots = { direct: {}, adapted: {}, author_required: {} };
+  for (const slot of slotNames) {
+    if (available.has(slot)) slots.direct[slot] = slot;
+    else slots.author_required[slot] = resolveStripFallback(slot, available);
+  }
+  const { spriteStrips: _spriteStrips, ...rest } = render;
+  return { ...rest, actions, slots };
+};
+
 const loadPacks = async () => {
   const config = await readJson(pipelineConfigPath);
   assert(config.version === 1, "fighters/pipeline.config.json: invalid version");
@@ -274,8 +391,16 @@ const loadPacks = async () => {
   for (const directoryName of directories) {
     const directory = join(packRoot, directoryName);
     const pack = await readJson(join(directory, "fighter.json"));
-    const render = await readJson(join(directory, "render.json"));
+    const rawRender = await readJson(join(directory, "render.json"));
     validateCommon(pack, directoryName);
+    // Drafts may not have any sprites yet; only ready packs are expanded.
+    const render = pack.status === "ready"
+      ? await expandSpriteStrips(
+          rawRender,
+          directory,
+          Object.keys(config.threeD.slotProfiles["platform-fighter"]),
+        )
+      : rawRender;
     if (pack.status === "ready") validateReadyPack(pack, render, config);
     loaded.push({ pack, render, directory });
   }
@@ -296,6 +421,8 @@ const generatedOutputs = ({ config, loaded }) => {
     "/* Generated by scripts/fighter_packs.mjs. Do not edit directly. */",
     `export const OPEN_3D_FIGHTER_IDS = ${JSON.stringify(ids3D, null, 2)} as const;`,
     `export const OPEN_2D_FIGHTER_IDS = ${JSON.stringify(ids2D, null, 2)} as const;`,
+    "/** Every ready fighter in pack `order`, regardless of render pipeline. */",
+    `export const OPEN_FIGHTER_IDS_BY_ORDER = ${JSON.stringify(packs.map(({ id }) => id), null, 2)} as const;`,
     `export const OPEN_FIGHTER_PACKS = ${JSON.stringify(packs, null, 2)} as const;`,
     "",
   ].join("\n");
@@ -439,13 +566,35 @@ const scaffold = async () => {
         license: fighter.visual.license.id,
         licenseUrl: fighter.visual.license.url,
         defaultFps: 12,
-        preferredScale: 0.7,
-        actions: {},
-        slots: { direct: {}, adapted: {}, author_required: {} },
+        preferredScale: 1,
+        spriteStrips: {
+          directory: "sprites",
+          frameWidth: 128,
+          frameHeight: 128,
+          fps: { idle: 8, walk: 10, run: 14 },
+        },
       };
   await mkdir(destination, { recursive: false });
   await writeFile(join(destination, "fighter.json"), json(fighter));
   await writeFile(join(destination, "render.json"), json(render));
+  if (kind === "2d") {
+    await mkdir(join(destination, "sprites"));
+    await writeFile(join(destination, "sprites", "README.md"), [
+      `# ${displayName} sprite strips`,
+      "",
+      "Add one horizontal PNG strip per animation slot, named after the slot",
+      "(`idle.png`, `walk.png`, `jab.png`, ...). Frames are laid left to right,",
+      "all the same size as `spriteStrips.frameWidth` x `frameHeight` in",
+      "render.json, on a transparent background, with the character facing",
+      "`visual.sourceFacing` and standing on the bottom edge.",
+      "",
+      "Only `idle.png` is required. Missing slots borrow a related strip",
+      "(for example `fast_fall` uses `fall`) and are reported as",
+      "author_required until you draw them. The full slot list is in",
+      "fighters/pipeline.config.json.",
+      "",
+    ].join("\n"));
+  }
   console.log(`Draft fighter pack created: ${destination}`);
   console.log("Complete fighter.json and render.json, then set status to ready.");
 };
@@ -465,7 +614,12 @@ const build = async () => {
       env: { OPEN_FIGHTERS: requestedId },
     });
   } else {
-    run("zsh", ["scripts/open_fighter_pipeline/render_2d_all.sh"], {
+    // Called through node directly so the 2D path works on any shell/OS.
+    for (const tool of ["ffmpeg", "ffprobe", "cwebp"]) {
+      const probe = spawnSync(tool, ["-version"], { stdio: "ignore" });
+      assert(probe.status === 0, `${tool} is required to build 2D fighters (run npm run content:doctor)`);
+    }
+    run(process.execPath, ["scripts/open_fighter_pipeline/build_2d_atlases.mjs"], {
       env: { OPEN_2D_FIGHTERS: requestedId },
     });
   }
