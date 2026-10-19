@@ -3,9 +3,9 @@
 Use the right channel so questions remain useful to future contributors:
 
 - **How do I…?**, design ideas, and early proposals:
-  [GitHub Discussions](https://github.com/Swarek/Super_Bash_Folds/discussions).
+  [GitHub Discussions](https://github.com/z-brenner/ultimatecrashout/discussions).
 - Reproducible bugs and accepted implementation tasks:
-  [GitHub Issues](https://github.com/Swarek/Super_Bash_Folds/issues).
+  [GitHub Issues](https://github.com/z-brenner/ultimatecrashout/issues).
 - Sensitive vulnerabilities, credentials, personal data, or prohibited assets:
   follow [SECURITY.md](SECURITY.md) and do not post publicly.
 

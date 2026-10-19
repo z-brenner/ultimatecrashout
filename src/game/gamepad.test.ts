@@ -3,6 +3,7 @@ import type { ActionName } from "./contracts";
 import { createEmptyInputFrame } from "./input";
 import {
   GAMEPAD_STORAGE_KEY,
+  LEGACY_GAMEPAD_STORAGE_KEY,
   GamepadManager,
   applyRadialDeadzone,
   mergeInputFrames,
@@ -302,6 +303,25 @@ describe("GamepadManager mapping and analog input", () => {
     expect(manager.consumeFrame(0).pressed.has("attack")).toBe(true);
     expect(manager.menuSnapshots()[0]).toMatchObject({ confirm: true, back: false });
     manager.destroy();
+  });
+
+  it("keeps controller bindings saved under the pre-rebrand storage key", () => {
+    const storage = new FakeStorage();
+    const pad = new FakePad(0);
+    const first = managerWith([pad], storage);
+    first.manager.startCapture(0, "attack");
+    first.manager.poll();
+    pad.button(5, true);
+    first.manager.poll();
+    first.manager.destroy();
+    pad.button(5, false);
+    // Simulate a browser that only has a save written by the previous build.
+    const legacyStorage = new FakeStorage();
+    legacyStorage.setItem(LEGACY_GAMEPAD_STORAGE_KEY, storage.getItem(GAMEPAD_STORAGE_KEY)!);
+
+    const migrated = managerWith([pad], legacyStorage);
+    expect(migrated.manager.getSnapshot().bindings[0].attack).toEqual([0, 5]);
+    migrated.manager.destroy();
   });
 
   it("adds a binding after release, resolves conflicts, and persists per player and id", () => {

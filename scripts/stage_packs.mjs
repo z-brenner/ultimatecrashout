@@ -323,7 +323,7 @@ const scaffold = async () => {
     order,
     identity: {
       displayName,
-      series: "Super Bash Folds",
+      series: "Ultimate Crashout",
       description: "Describe the stage's gameplay identity",
     },
     gameplay: {

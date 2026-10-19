@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  LEGACY_SETTINGS_STORAGE_KEY,
   SETTINGS_STORAGE_KEY,
   SettingsStore,
   createDefaultSettings,
@@ -29,6 +30,17 @@ class MemoryStorage implements SettingsStorage {
 }
 
 describe("settings", () => {
+  it("reads settings saved under the pre-rebrand key and saves under the new one", () => {
+    const storage = new MemoryStorage();
+    const legacy = createDefaultSettings();
+    legacy.bindings[0].attack = "Space";
+    storage.setItem(LEGACY_SETTINGS_STORAGE_KEY, JSON.stringify(legacy));
+    const loaded = loadSettings(storage);
+    expect(loaded.bindings[0].attack).toBe("Space");
+    saveSettings(loaded, storage);
+    expect(storage.getItem(SETTINGS_STORAGE_KEY)).toContain("Space");
+  });
+
   it("returns independent defaults", () => {
     const first = createDefaultSettings();
     const second = createDefaultSettings();

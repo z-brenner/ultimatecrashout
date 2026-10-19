@@ -1,6 +1,6 @@
 # Naming, trademark, and content policy
 
-Super Bash Folds is an independent platform fighter. The project must never be
+Ultimate Crashout is an independent platform fighter. The project must never be
 presented as a sequel, port, remake, or product affiliated with an existing
 franchise.
 
@@ -11,17 +11,21 @@ relevant countries.
 
 ## Name and identity
 
-- The public name is **Super Bash Folds**. Former names must no longer appear in
-  the product, packages, screenshots, releases, or metadata.
-- The logo uses two offset platform angles. It must not reproduce another
-  game's symbol, typography, or visual composition.
+- The public name is **Ultimate Crashout**. The project is a fork of the
+  MIT-licensed **Super Bash Folds**; that name may appear only in attribution,
+  the license notice, and historical records.
+- The logo must not reproduce another game's symbol, typography, or visual
+  composition.
 - Public pages use only "platform fighter" to describe the genre. Third-party
-  trademarks must not be used as subtitles, promotional keywords, or mode names.
-- A preliminary exact-match search for "Super Bash Folds" conducted on July 16,
-  2026 across the Web, GitHub, and npm found no project with that exact name.
-  This check is neither exhaustive nor a guarantee of availability: the EUIPO
-  also recommends searching for similar signs and notes that a trademark may be
-  challenged even when a search returns no result.
+  trademarks (including any "Smash" or "Super Smash Bros." reference) must not
+  be used as subtitles, promotional keywords, store tags, or mode names.
+- **No clearance search has been done for "Ultimate Crashout".** Note the
+  specific risk: "Super Smash Bros. Ultimate" is a registered, actively
+  enforced mark in the same genre and channel. "Ultimate" alone is a common,
+  weak term, but pairing it with Smash-like presentation (logo treatment, a
+  rhyming "-ash" word, comparative marketing) increases the likelihood-of-
+  confusion argument. Run a USPTO/EUIPO search for similar signs in classes 9
+  and 41 before any commercial release.
 
 Official references:
 

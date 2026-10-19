@@ -565,7 +565,7 @@ input.setEnabled(false);
 requestAnimationFrame(tick);
 
 // Exposed only for focused browser smoke tests and local debugging.
-Object.defineProperty(window, "__SUPER_BASH_FOLDS__", {
+Object.defineProperty(window, "__ULTIMATE_CRASHOUT__", {
   value: {
     getSnapshot: () => game?.getSnapshot() ?? null,
     startMatch: (config?: MatchConfig) => {

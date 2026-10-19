@@ -7,7 +7,9 @@ import type {
 import { ACTION_NAMES, DEFAULT_BINDINGS } from "./input";
 import { createPersistentBrowserStorage } from "./persistentStorage";
 
-export const SETTINGS_STORAGE_KEY = "super-bash-folds.settings.v1";
+export const SETTINGS_STORAGE_KEY = "ultimate-crashout.settings.v1";
+/** Pre-rebrand key; read once so existing players keep their bindings. */
+export const LEGACY_SETTINGS_STORAGE_KEY = "super-bash-folds.settings.v1";
 
 export interface SettingsStorage {
   getItem(key: string): string | null;
@@ -118,7 +120,8 @@ export function loadSettings(
 ): GameSettings {
   if (!storage) return createDefaultSettings();
   try {
-    const serialized = storage.getItem(SETTINGS_STORAGE_KEY);
+    const serialized = storage.getItem(SETTINGS_STORAGE_KEY) ??
+      storage.getItem(LEGACY_SETTINGS_STORAGE_KEY);
     return serialized === null
       ? createDefaultSettings()
       : sanitizeSettings(JSON.parse(serialized) as unknown);

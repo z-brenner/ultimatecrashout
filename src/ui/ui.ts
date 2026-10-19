@@ -331,8 +331,8 @@ function portraitMarkup(
 }
 
 /**
- * DOM UI for Super Bash Folds. The class is deliberately engine-agnostic: game
- * code can use callbacks or listen for `super-bash-folds:*` CustomEvents.
+ * DOM UI for Ultimate Crashout. The class is deliberately engine-agnostic: game
+ * code can use callbacks or listen for `ultimate-crashout:*` CustomEvents.
  */
 export class UIController extends EventTarget {
   readonly root: HTMLElement;
@@ -418,7 +418,7 @@ export class UIController extends EventTarget {
     const screenRoot = this.shell.querySelector<HTMLElement>("[data-cc-screen-root]");
     const liveRegion = this.shell.querySelector<HTMLElement>("[data-cc-live]");
     if (!screenRoot || !liveRegion) {
-      throw new Error("Could not initialize the Super Bash Folds interface.");
+      throw new Error("Could not initialize the Ultimate Crashout interface.");
     }
 
     this.screenRoot = screenRoot;
@@ -477,12 +477,12 @@ export class UIController extends EventTarget {
     this.renderScreen(
       "boot",
       `
-        <section class="cc-boot" aria-label="Launching Super Bash Folds">
+        <section class="cc-boot" aria-label="Launching Ultimate Crashout">
           <div class="cc-boot__flash" aria-hidden="true"></div>
           <div class="cc-boot__mark" aria-hidden="true"><i></i><b></b></div>
           <div class="cc-boot__wordmark">
-            <strong>Super</strong>
-            <em>Bash Folds</em>
+            <strong>Ultimate</strong>
+            <em>Crashout</em>
           </div>
           <p>A local battle for two players</p>
           <button class="cc-boot__skip" type="button" data-ui-action="boot-skip" hidden>Skip</button>
@@ -524,7 +524,7 @@ export class UIController extends EventTarget {
         <section class="cc-title-screen cc-enter" aria-labelledby="cc-title-logo">
           <div class="cc-title-screen__burst" aria-hidden="true"></div>
           <div class="cc-title-screen__logo" id="cc-title-logo">
-            <strong>Super</strong><em>Bash Folds</em>
+            <strong>Ultimate</strong><em>Crashout</em>
           </div>
           <button class="cc-title-screen__start" type="button" data-ui-action="title-start">
             <span>Press</span><strong>Enter</strong>
@@ -772,7 +772,7 @@ export class UIController extends EventTarget {
         <section class="cc-home cc-home--mosaic cc-enter" aria-labelledby="cc-home-title">
           <header class="cc-home-masthead">
             <div class="cc-home-masthead__brand" id="cc-home-title">
-              <strong>Super</strong><em>Bash Folds</em>
+              <strong>Ultimate</strong><em>Crashout</em>
             </div>
             <div class="cc-home-masthead__meta"><span>Local battle</span><b>2 players • keyboard or controllers</b></div>
           </header>
@@ -802,7 +802,7 @@ export class UIController extends EventTarget {
               <span class="cc-home-tile__stock" aria-hidden="true">×${this.matchStocks}</span>
               <span class="cc-home-tile__copy"><small>Rules</small><strong>${this.matchStocks} stock${this.matchStocks === 1 ? "" : "s"}</strong><em>${homeTimeLabel}</em></span>
             </div>
-            <span class="cc-home-medallion" aria-hidden="true"><i></i><b></b><em>SBF</em></span>
+            <span class="cc-home-medallion" aria-hidden="true"><i></i><b></b><em>UC</em></span>
           </nav>
           <footer class="cc-home__footer">
             <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
@@ -1856,7 +1856,7 @@ export class UIController extends EventTarget {
   private emit<K extends keyof UIControllerEventMap>(name: K, detail: UIControllerEventMap[K]): void {
     this.dispatchEvent(new CustomEvent(name, { detail }));
     this.root.dispatchEvent(
-      new CustomEvent(`super-bash-folds:${name}`, { detail, bubbles: true }),
+      new CustomEvent(`ultimate-crashout:${name}`, { detail, bubbles: true }),
     );
   }
 

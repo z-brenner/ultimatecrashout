@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://super-bash-folds.local/schemas/stage.schema.json",
-  "title": "Super Bash Folds stage pack",
+  "$id": "https://ultimate-crashout.local/schemas/stage.schema.json",
+  "title": "Ultimate Crashout stage pack",
   "type": "object",
   "additionalProperties": false,
   "required": [

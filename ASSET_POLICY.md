@@ -1,6 +1,6 @@
 # Public asset policy
 
-The Super Bash Folds code is released under MIT. Original project creations
+The Ultimate Crashout code is released under MIT. Original project creations
 under `public/assets/open/` and `public/favicon.svg` are dedicated to the public
 domain under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 The launch media listed in `website/public/PROVENANCE.md` and

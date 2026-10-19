@@ -1,11 +1,11 @@
 {
-  "name": "super-bash-folds",
+  "name": "ultimate-crashout",
   "private": true,
   "version": "0.1.0",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Swarek/Super_Bash_Folds.git"
+    "url": "https://github.com/z-brenner/ultimatecrashout.git"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

@@ -17,7 +17,7 @@ export const OPEN_STAGE_PACKS = [
     "order": 10,
     "identity": {
       "displayName": "Verdant Grove",
-      "series": "Super Bash Folds",
+      "series": "Ultimate Crashout",
       "description": "An open clearing and three platforms for fast play on the ground and in the air"
     },
     "gameplay": {

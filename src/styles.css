@@ -4584,7 +4584,7 @@ button.cc-home-tile:focus-visible::after { opacity: 1; }
   right: 0;
   left: 0;
   height: clamp(46px, 7vh, 72px);
-  content: "Super Bash Folds  •  3-stock battle";
+  content: "Ultimate Crashout  •  battle results";
   padding: 12px 5vw;
   color: #fff;
   background: linear-gradient(100deg, rgba(206, 22, 31, 0.92), rgba(126, 8, 18, 0.7) 60%, transparent);
@@ -5335,7 +5335,7 @@ button.cc-home-tile:focus-visible::after { opacity: 1; }
   .cc-ui-host .is-cursor-p2 { transition: none !important; }
 }
 
-/* Super Bash Folds identity: folded platforms, cool sky light and coral motion. */
+/* Ultimate Crashout identity (inherited from the original fold motif): folded platforms, cool sky light and coral motion. */
 :root {
   --cc-ink: #071522;
   --cc-night: #10283a;

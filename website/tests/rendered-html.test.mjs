@@ -57,7 +57,7 @@ test("serves discovery metadata", async () => {
 test("embeds a complete public game bundle", async () => {
   const publicRoot = fileURLToPath(new URL("../public/", import.meta.url));
   const gameEntry = await readFile(resolve(publicRoot, "play/index.html"), "utf8");
-  assert.match(gameEntry, /<title>Super Bash Folds<\/title>/);
+  assert.match(gameEntry, /<title>Ultimate Crashout<\/title>/);
 
   const assetUrls = [...gameEntry.matchAll(/(?:href|src)="(\/assets\/[^"]+)"/g)]
     .map((match) => match[1]);

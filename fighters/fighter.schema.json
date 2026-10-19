@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://super-bash-folds.local/schemas/fighter.schema.json",
-  "title": "Super Bash Folds fighter pack",
+  "$id": "https://ultimate-crashout.local/schemas/fighter.schema.json",
+  "title": "Ultimate Crashout fighter pack",
   "type": "object",
   "additionalProperties": false,
   "required": [
