@@ -116,6 +116,7 @@ export default defineConfig(({ command }) => ({
       "**/dist/**",
       "**/.local-private/**",
       "website/**",
+      "e2e/**",
     ],
   },
 }));

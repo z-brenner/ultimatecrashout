@@ -1,0 +1,161 @@
+import { expect, test } from "@playwright/test";
+import {
+  fighters,
+  holdKey,
+  readyFighterIds,
+  trackProblems,
+  waitForPlaying,
+} from "./helpers";
+
+test.describe("menus", () => {
+  test("boots to the title and the main menu without errors", async ({ page }) => {
+    const problems = trackProblems(page);
+    await page.goto("/");
+    await page.locator("[data-ui-action='boot-skip']").click();
+    await expect(page.locator("[data-ui-action='title-start']")).toBeVisible();
+    // The start prompt pulses forever, so press Enter like a player would.
+    await page.keyboard.press("Enter");
+    await expect(page.locator("[data-ui-action='home-play']")).toBeVisible();
+    await expect(page).toHaveTitle(/Ultimate Crashout/);
+    expect(problems).toEqual([]);
+  });
+
+  test("character select lists every ready fighter pack automatically", async ({ page }) => {
+    const problems = trackProblems(page);
+    await page.goto("/");
+    await page.locator("[data-ui-action='boot-skip']").click();
+    await expect(page.locator("[data-ui-action='title-start']")).toBeVisible();
+    // The start prompt pulses forever, so press Enter like a player would.
+    await page.keyboard.press("Enter");
+    await page.locator("[data-ui-action='home-play']").click();
+
+    const cards = page.locator("[data-ui-action='pick-fighter']");
+    const expected = readyFighterIds();
+    await expect(cards).toHaveCount(expected.length);
+    expect(await cards.evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset.fighter)))
+      .toEqual(expected);
+    // Every portrait thumbnail actually loads.
+    await expect.poll(() => page.locator(".cc-fighter-card img").evaluateAll((images) =>
+      images.every((image) => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0),
+    )).toBe(true);
+    expect(problems).toEqual([]);
+  });
+});
+
+test.describe("local match", () => {
+  test("plays a full menu-to-match flow with two keyboard players", async ({ page }) => {
+    const problems = trackProblems(page);
+    await page.goto("/");
+    await page.locator("[data-ui-action='boot-skip']").click();
+    await expect(page.locator("[data-ui-action='title-start']")).toBeVisible();
+    // The start prompt pulses forever, so press Enter like a player would.
+    await page.keyboard.press("Enter");
+    await page.locator("[data-ui-action='home-play']").click();
+
+    await page.locator("[data-ui-action='pick-fighter'][data-fighter='buckle']").click();
+    await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='0']").click();
+    await page.locator("[data-ui-action='pick-fighter'][data-fighter='rgs-stick']").click();
+    await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='1']").click();
+    await page.locator("[data-ui-action='open-stage-select']").click();
+    await page.locator("[data-ui-action='select-stage']").first().click();
+    await page.locator("[data-ui-action='stage-confirm']").click();
+
+    await waitForPlaying(page);
+    const start = await fighters(page);
+    expect(start?.map(({ fighter }) => fighter)).toEqual(["buckle", "rgs-stick"]);
+
+    // P1 (WASD) walks right; P2 (arrows) walks left.
+    await page.keyboard.down("KeyD");
+    await page.keyboard.down("ArrowLeft");
+    await page.waitForTimeout(500);
+    await page.keyboard.up("KeyD");
+    await page.keyboard.up("ArrowLeft");
+    const moved = await fighters(page);
+    expect(moved![0]!.x).toBeGreaterThan(start![0]!.x + 40);
+    expect(moved![1]!.x).toBeLessThan(start![1]!.x - 40);
+
+    // P1 jumps.
+    await page.keyboard.press("KeyH");
+    await expect.poll(async () => (await fighters(page))![0]!.y, { timeout: 2_000 })
+      .toBeGreaterThan(start![0]!.y + 20);
+
+    // Pause and resume.
+    await page.keyboard.press("Escape");
+    await expect(page.locator("[data-ui-action='pause-resume']")).toBeVisible();
+    await page.locator("[data-ui-action='pause-resume']").click();
+    await expect(page.locator("[data-ui-action='pause-resume']")).toHaveCount(0);
+    expect(problems).toEqual([]);
+  });
+
+  test("a landed attack deals damage", async ({ page }) => {
+    const problems = trackProblems(page);
+    await page.goto("/?match=buckle,rgs-stick&items=0");
+    await waitForPlaying(page);
+    // Close the gap, then jab until the hit registers.
+    await holdKey(page, "KeyD", 650);
+    await expect.poll(async () => {
+      await page.keyboard.press("KeyF");
+      return (await fighters(page))![1]!.percent;
+    }, { timeout: 8_000, intervals: [150] }).toBeGreaterThan(0);
+    expect(problems).toEqual([]);
+  });
+
+  test("the F9 collision overlay toggles without disturbing play", async ({ page }) => {
+    const problems = trackProblems(page);
+    await page.goto("/?match=buckle,rgs-stick&items=0");
+    await waitForPlaying(page);
+    await page.keyboard.press("F9");
+    await holdKey(page, "KeyD", 200);
+    await page.keyboard.press("F9");
+    expect((await fighters(page))![0]!.state).not.toBe("ko");
+    expect(problems).toEqual([]);
+  });
+});
+
+test.describe("controller", () => {
+  test("a connected gamepad drives a fighter", async ({ page }) => {
+    // Chromium cannot attach real controllers in CI, so expose one virtual
+    // standard-mapping pad through navigator.getGamepads().
+    await page.addInitScript(() => {
+      const buttons = Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 }));
+      const pad = {
+        id: "Virtual Xbox Controller (STANDARD GAMEPAD)",
+        index: 0,
+        connected: true,
+        mapping: "standard",
+        timestamp: 0,
+        axes: [0, 0, 0, 0],
+        buttons,
+        vibrationActuator: null,
+      };
+      (window as unknown as { __virtualPad: typeof pad }).__virtualPad = pad;
+      Object.defineProperty(navigator, "getGamepads", {
+        value: () => [pad, null, null, null],
+        configurable: true,
+      });
+      window.addEventListener("load", () => {
+        const event = new Event("gamepadconnected");
+        Object.defineProperty(event, "gamepad", { value: pad });
+        window.dispatchEvent(event);
+      });
+    });
+    const problems = trackProblems(page);
+    await page.goto("/?match=buckle,rgs-stick&items=0");
+    await waitForPlaying(page);
+    const start = await fighters(page);
+
+    const setStick = (x: number) => page.evaluate((value) => {
+      const pad = (window as unknown as { __virtualPad: { axes: number[]; timestamp: number } }).__virtualPad;
+      pad.axes[0] = value;
+      pad.timestamp += 1;
+    }, x);
+    await setStick(1);
+    await page.waitForTimeout(600);
+    await setStick(0);
+
+    const after = await fighters(page);
+    const moved = after!.map((fighter, slot) => Math.abs(fighter.x - start![slot]!.x));
+    expect(Math.max(...moved)).toBeGreaterThan(40);
+    expect(problems).toEqual([]);
+  });
+});

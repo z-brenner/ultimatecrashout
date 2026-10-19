@@ -41,9 +41,11 @@
     "test:public-content": "vitest run src/game/publicContent.test.ts src/game/roster.test.ts src/game/content.test.ts src/ui/publicContentUi.test.ts",
     "validate:public": "npm run check:public-assets && npm run check:public-history && npm run check:public-source && npm run fighter:check && npm run stage:check && npm run validate:open-fighters && npm run test:public && npm run build:public",
     "test:watch": "vitest",
-    "preview": "npm run check:public-dist && vite preview --host 0.0.0.0"
+    "preview": "npm run check:public-dist && vite preview --host 0.0.0.0",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.1",
     "@types/three": "^0.185.1",
     "happy-dom": "^20.10.6",
     "typescript": "^7.0.2",
