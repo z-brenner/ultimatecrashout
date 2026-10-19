@@ -1,0 +1,668 @@
+{
+  "id": "buckle",
+  "displayName": "Buckle",
+  "author": "Ultimate Crashout contributors",
+  "sourcePage": "https://github.com/z-brenner/ultimatecrashout",
+  "license": "CC0-1.0",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "transformation": "Only upstream raster frames were cropped, uniformly scaled, padded, optionally sampled, tiled and losslessly WebP-encoded. Upstream JSON or GIF companions were used only to read frame rectangles, counts and rates. No frame or motion was synthesized.",
+  "coverageCounts": {
+    "direct": 50,
+    "adapted": 0,
+    "author_required": 0
+  },
+  "actions": {
+    "idle": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 8,
+      "sources": [
+        "fighters/buckle/sprites/idle.png"
+      ]
+    },
+    "crouch": {
+      "frameCount": 4,
+      "sourceFrameCount": 4,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/crouch.png"
+      ]
+    },
+    "walk": {
+      "frameCount": 8,
+      "sourceFrameCount": 8,
+      "sampleStep": 1,
+      "fps": 10,
+      "sources": [
+        "fighters/buckle/sprites/walk.png"
+      ]
+    },
+    "turn": {
+      "frameCount": 3,
+      "sourceFrameCount": 3,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/turn.png"
+      ]
+    },
+    "dash": {
+      "frameCount": 5,
+      "sourceFrameCount": 5,
+      "sampleStep": 1,
+      "fps": 14,
+      "sources": [
+        "fighters/buckle/sprites/dash.png"
+      ]
+    },
+    "run": {
+      "frameCount": 8,
+      "sourceFrameCount": 8,
+      "sampleStep": 1,
+      "fps": 14,
+      "sources": [
+        "fighters/buckle/sprites/run.png"
+      ]
+    },
+    "jump_squat": {
+      "frameCount": 3,
+      "sourceFrameCount": 3,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/jump_squat.png"
+      ]
+    },
+    "jump": {
+      "frameCount": 4,
+      "sourceFrameCount": 4,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/jump.png"
+      ]
+    },
+    "double_jump": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/double_jump.png"
+      ]
+    },
+    "fall": {
+      "frameCount": 4,
+      "sourceFrameCount": 4,
+      "sampleStep": 1,
+      "fps": 8,
+      "sources": [
+        "fighters/buckle/sprites/fall.png"
+      ]
+    },
+    "fast_fall": {
+      "frameCount": 3,
+      "sourceFrameCount": 3,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/fast_fall.png"
+      ]
+    },
+    "jab": {
+      "frameCount": 5,
+      "sourceFrameCount": 5,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/jab.png"
+      ]
+    },
+    "dash_attack": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/dash_attack.png"
+      ]
+    },
+    "forward_tilt": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/forward_tilt.png"
+      ]
+    },
+    "up_tilt": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/up_tilt.png"
+      ]
+    },
+    "down_tilt": {
+      "frameCount": 5,
+      "sourceFrameCount": 5,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/down_tilt.png"
+      ]
+    },
+    "forward_smash": {
+      "frameCount": 8,
+      "sourceFrameCount": 8,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/forward_smash.png"
+      ]
+    },
+    "up_smash": {
+      "frameCount": 8,
+      "sourceFrameCount": 8,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/up_smash.png"
+      ]
+    },
+    "down_smash": {
+      "frameCount": 8,
+      "sourceFrameCount": 8,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/down_smash.png"
+      ]
+    },
+    "neutral_air": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/neutral_air.png"
+      ]
+    },
+    "forward_air": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/forward_air.png"
+      ]
+    },
+    "back_air": {
+      "frameCount": 5,
+      "sourceFrameCount": 5,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/back_air.png"
+      ]
+    },
+    "up_air": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/up_air.png"
+      ]
+    },
+    "down_air": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/down_air.png"
+      ]
+    },
+    "neutral_special": {
+      "frameCount": 7,
+      "sourceFrameCount": 7,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/neutral_special.png"
+      ]
+    },
+    "side_special": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/side_special.png"
+      ]
+    },
+    "up_special": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/up_special.png"
+      ]
+    },
+    "down_special": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/down_special.png"
+      ]
+    },
+    "spot_dodge": {
+      "frameCount": 5,
+      "sourceFrameCount": 5,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/spot_dodge.png"
+      ]
+    },
+    "roll_forward": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/roll_forward.png"
+      ]
+    },
+    "roll_back": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/roll_back.png"
+      ]
+    },
+    "air_dodge": {
+      "frameCount": 5,
+      "sourceFrameCount": 5,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/air_dodge.png"
+      ]
+    },
+    "shield": {
+      "frameCount": 3,
+      "sourceFrameCount": 3,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/shield.png"
+      ]
+    },
+    "item_hold": {
+      "frameCount": 4,
+      "sourceFrameCount": 4,
+      "sampleStep": 1,
+      "fps": 8,
+      "sources": [
+        "fighters/buckle/sprites/item_hold.png"
+      ]
+    },
+    "item_pickup": {
+      "frameCount": 4,
+      "sourceFrameCount": 4,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/item_pickup.png"
+      ]
+    },
+    "item_attack": {
+      "frameCount": 5,
+      "sourceFrameCount": 5,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/item_attack.png"
+      ]
+    },
+    "grab": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/grab.png"
+      ]
+    },
+    "grab_hold": {
+      "frameCount": 4,
+      "sourceFrameCount": 4,
+      "sampleStep": 1,
+      "fps": 8,
+      "sources": [
+        "fighters/buckle/sprites/grab_hold.png"
+      ]
+    },
+    "grabbed": {
+      "frameCount": 4,
+      "sourceFrameCount": 4,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/grabbed.png"
+      ]
+    },
+    "forward_throw": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/forward_throw.png"
+      ]
+    },
+    "back_throw": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/back_throw.png"
+      ]
+    },
+    "up_throw": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/up_throw.png"
+      ]
+    },
+    "down_throw": {
+      "frameCount": 6,
+      "sourceFrameCount": 6,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/down_throw.png"
+      ]
+    },
+    "hurt": {
+      "frameCount": 4,
+      "sourceFrameCount": 4,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/hurt.png"
+      ]
+    },
+    "knockback": {
+      "frameCount": 4,
+      "sourceFrameCount": 4,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/knockback.png"
+      ]
+    },
+    "downed": {
+      "frameCount": 4,
+      "sourceFrameCount": 4,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/downed.png"
+      ]
+    },
+    "ledge": {
+      "frameCount": 4,
+      "sourceFrameCount": 4,
+      "sampleStep": 1,
+      "fps": 8,
+      "sources": [
+        "fighters/buckle/sprites/ledge.png"
+      ]
+    },
+    "entrance": {
+      "frameCount": 8,
+      "sourceFrameCount": 8,
+      "sampleStep": 1,
+      "fps": 12,
+      "sources": [
+        "fighters/buckle/sprites/entrance.png"
+      ]
+    },
+    "taunt": {
+      "frameCount": 8,
+      "sourceFrameCount": 8,
+      "sampleStep": 1,
+      "fps": 10,
+      "sources": [
+        "fighters/buckle/sprites/taunt.png"
+      ]
+    },
+    "victory": {
+      "frameCount": 8,
+      "sourceFrameCount": 8,
+      "sampleStep": 1,
+      "fps": 10,
+      "sources": [
+        "fighters/buckle/sprites/victory.png"
+      ]
+    }
+  },
+  "slots": {
+    "idle": {
+      "action": "idle",
+      "coverage": "direct"
+    },
+    "crouch": {
+      "action": "crouch",
+      "coverage": "direct"
+    },
+    "walk": {
+      "action": "walk",
+      "coverage": "direct"
+    },
+    "turn": {
+      "action": "turn",
+      "coverage": "direct"
+    },
+    "dash": {
+      "action": "dash",
+      "coverage": "direct"
+    },
+    "run": {
+      "action": "run",
+      "coverage": "direct"
+    },
+    "jump_squat": {
+      "action": "jump_squat",
+      "coverage": "direct"
+    },
+    "jump": {
+      "action": "jump",
+      "coverage": "direct"
+    },
+    "double_jump": {
+      "action": "double_jump",
+      "coverage": "direct"
+    },
+    "fall": {
+      "action": "fall",
+      "coverage": "direct"
+    },
+    "fast_fall": {
+      "action": "fast_fall",
+      "coverage": "direct"
+    },
+    "jab": {
+      "action": "jab",
+      "coverage": "direct"
+    },
+    "dash_attack": {
+      "action": "dash_attack",
+      "coverage": "direct"
+    },
+    "forward_tilt": {
+      "action": "forward_tilt",
+      "coverage": "direct"
+    },
+    "up_tilt": {
+      "action": "up_tilt",
+      "coverage": "direct"
+    },
+    "down_tilt": {
+      "action": "down_tilt",
+      "coverage": "direct"
+    },
+    "forward_smash": {
+      "action": "forward_smash",
+      "coverage": "direct"
+    },
+    "up_smash": {
+      "action": "up_smash",
+      "coverage": "direct"
+    },
+    "down_smash": {
+      "action": "down_smash",
+      "coverage": "direct"
+    },
+    "neutral_air": {
+      "action": "neutral_air",
+      "coverage": "direct"
+    },
+    "forward_air": {
+      "action": "forward_air",
+      "coverage": "direct"
+    },
+    "back_air": {
+      "action": "back_air",
+      "coverage": "direct"
+    },
+    "up_air": {
+      "action": "up_air",
+      "coverage": "direct"
+    },
+    "down_air": {
+      "action": "down_air",
+      "coverage": "direct"
+    },
+    "neutral_special": {
+      "action": "neutral_special",
+      "coverage": "direct"
+    },
+    "side_special": {
+      "action": "side_special",
+      "coverage": "direct"
+    },
+    "up_special": {
+      "action": "up_special",
+      "coverage": "direct"
+    },
+    "down_special": {
+      "action": "down_special",
+      "coverage": "direct"
+    },
+    "spot_dodge": {
+      "action": "spot_dodge",
+      "coverage": "direct"
+    },
+    "roll_forward": {
+      "action": "roll_forward",
+      "coverage": "direct"
+    },
+    "roll_back": {
+      "action": "roll_back",
+      "coverage": "direct"
+    },
+    "air_dodge": {
+      "action": "air_dodge",
+      "coverage": "direct"
+    },
+    "shield": {
+      "action": "shield",
+      "coverage": "direct"
+    },
+    "item_hold": {
+      "action": "item_hold",
+      "coverage": "direct"
+    },
+    "item_pickup": {
+      "action": "item_pickup",
+      "coverage": "direct"
+    },
+    "item_attack": {
+      "action": "item_attack",
+      "coverage": "direct"
+    },
+    "grab": {
+      "action": "grab",
+      "coverage": "direct"
+    },
+    "grab_hold": {
+      "action": "grab_hold",
+      "coverage": "direct"
+    },
+    "grabbed": {
+      "action": "grabbed",
+      "coverage": "direct"
+    },
+    "forward_throw": {
+      "action": "forward_throw",
+      "coverage": "direct"
+    },
+    "back_throw": {
+      "action": "back_throw",
+      "coverage": "direct"
+    },
+    "up_throw": {
+      "action": "up_throw",
+      "coverage": "direct"
+    },
+    "down_throw": {
+      "action": "down_throw",
+      "coverage": "direct"
+    },
+    "hurt": {
+      "action": "hurt",
+      "coverage": "direct"
+    },
+    "knockback": {
+      "action": "knockback",
+      "coverage": "direct"
+    },
+    "downed": {
+      "action": "downed",
+      "coverage": "direct"
+    },
+    "ledge": {
+      "action": "ledge",
+      "coverage": "direct"
+    },
+    "entrance": {
+      "action": "entrance",
+      "coverage": "direct"
+    },
+    "taunt": {
+      "action": "taunt",
+      "coverage": "direct"
+    },
+    "victory": {
+      "action": "victory",
+      "coverage": "direct"
+    }
+  }
+}
