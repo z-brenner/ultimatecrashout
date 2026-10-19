@@ -1498,6 +1498,7 @@ export class UIController extends EventTarget {
             <span>${fighter.epithet}</span>
             <h2>${fighter.name}</h2>
             <p>${fighter.style}</p>
+            <button class="cc-random-pick" type="button" data-ui-action="random-fighter" data-player-slot="${slot}" aria-label="Pick a random fighter for player ${slot + 1}" ${confirmed ? "disabled" : ""}><span aria-hidden="true">⚄</span> Random</button>
           </div>
         </div>
         <label class="cc-cpu-level${isCpu ? "" : " is-hidden"}">
@@ -1975,6 +1976,17 @@ export class UIController extends EventTarget {
         const fighter = FIGHTERS.find((candidate) => candidate.id === trigger.dataset.fighter);
         if (requestedSlot !== undefined && fighter) {
           this.selectFighterForPlayer(this.pointerSelectionSlot(requestedSlot), fighter.id);
+        }
+        break;
+      }
+      case "random-fighter": {
+        const slot = this.readSlot(trigger.dataset.playerSlot);
+        if (slot !== undefined) {
+          const pool = FIGHTERS.filter((candidate) => candidate.visualReady);
+          const others = pool.filter((candidate) => candidate.id !== this.selectedFighters[slot]);
+          const choices = others.length > 0 ? others : pool;
+          const pick = choices[Math.floor(Math.random() * choices.length)];
+          if (pick) this.selectFighterForPlayer(slot, pick.id);
         }
         break;
       }

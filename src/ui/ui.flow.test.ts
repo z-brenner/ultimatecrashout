@@ -425,6 +425,31 @@ describe("complete local UI flow", () => {
     ui.destroy();
   });
 
+  it("picks a different selectable fighter at random and locks Random once confirmed", () => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    const ui = new UIController(root);
+    click(root, "[data-ui-action='boot-skip']");
+    click(root, "[data-ui-action='title-start']");
+    click(root, "[data-ui-action='home-play']");
+
+    const selected = () => root.querySelector<HTMLElement>(
+      ".cc-player-panel--p1 .cc-selected-fighter__copy h2",
+    )?.textContent;
+    const before = selected();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    click(root, "[data-ui-action='random-fighter'][data-player-slot='0']");
+    const after = selected();
+    expect(after).not.toBe(before);
+    expect(FIGHTER_IDS.map((id) => getFighterDefinition(id).displayName)).toContain(after);
+
+    click(root, "[data-ui-action='toggle-player-ready'][data-player-slot='0']");
+    expect(root.querySelector<HTMLButtonElement>(
+      "[data-ui-action='random-fighter'][data-player-slot='0']",
+    )?.disabled).toBe(true);
+    ui.destroy();
+  });
+
   it("renders the dynamic fighter catalog with readable adaptive rows and coherent navigation", () => {
     vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => {
       callback(0);
