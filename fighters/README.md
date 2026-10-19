@@ -109,12 +109,75 @@ the fighter thumbnail. After manually replacing multiple fighter portraits or
 stage previews, run `npm run optimize:ui-assets`.
 
 Stats, movement tuning, animation mapping, all four special moves, and effects
-already supported by the engine are configurable in the pack. Standard attack
-logic is still shared by the engine; follow
-[issue #11](https://github.com/Swarek/Super_Bash_Folds/issues/11) for the pack
-contract that will expose it. A completely new mechanic, such as a new kind of
-tether, a transformation, or unsupported projectile behavior, still requires
-an engine implementation before the pack can reference it.
+already supported by the engine are configurable in the pack. A completely new
+mechanic, such as a new kind of tether, a transformation, or unsupported
+projectile behavior, still requires an engine implementation before the pack
+can reference it.
+
+## Authoring moves, hitboxes, and knockback
+
+Without extra data, every fighter receives the engine's generated kit: 13
+standard attacks scaled by the optional `gameplay.power`, `gameplay.speed`,
+and `gameplay.reach` multipliers, plus the four specials declared under
+`gameplay.specials`. To give a fighter its own moves, add `gameplay.attacks`.
+Each key is one of the 17 move names, and each value replaces only the fields
+it declares:
+
+```json
+"gameplay": {
+  "maxJumps": 3,
+  "attacks": {
+    "jab": { "label": "Snap Jab", "damage": 4, "startup": 2, "active": 3, "recovery": 8 },
+    "forward-smash": {
+      "damage": 21,
+      "angle": 38,
+      "baseKnockback": 64,
+      "knockbackGrowth": 1.12,
+      "hitboxes": [
+        { "offset": { "x": 24, "y": 10 }, "radius": 16, "kind": "sour", "priority": 2 },
+        { "offset": { "x": 48, "y": 10 }, "endOffset": { "x": 60, "y": 4 }, "radius": 14,
+          "activeStart": 0, "activeEnd": 3, "kind": "sweet", "damageMultiplier": 1.15 }
+      ]
+    }
+  },
+  "throws": { "back": { "damage": 11, "baseKnockback": 60 } }
+}
+```
+
+Rules worth knowing:
+
+- Authored values are absolute; `power`, `speed`, and `reach` do not rescale
+  them. Frame counts run at 60 frames per second.
+- `angle` is in degrees: `0` launches forward, `90` straight up, `270` straight
+  down. It is mirrored automatically when the fighter faces left.
+- Hitbox `offset` is in fighter-local world units: `x` points forward, `y`
+  points up from the fighter's center. `activeStart`/`activeEnd` count from the
+  first active frame; a hitbox with `endOffset` sweeps linearly between the two
+  positions. When several bubbles touch a target, the highest `priority` wins.
+- Without `hitboxes`, the engine derives a compact sweet/sour chain from
+  `offset` and `radius`.
+- When you change `damage` without authoring `hitstop` or `shieldDamage`,
+  those two are recomputed from the new damage.
+- `throws`, `maxJumps` (1–6), `shieldHealth`, `shieldRegen`, `traction`, and
+  `airAcceleration` are optional fighter-wide overrides.
+- Specials may also be overridden here, for example to author knockback that
+  `gameplay.specials` would otherwise derive from damage.
+
+`npm run fighter:build` validates every override and reports the exact field
+that is wrong; the full contract is in [fighter.schema.json](fighter.schema.json).
+Turn on the in-match hitbox overlay (see "Debugging moves" below) while tuning.
+
+## Debugging moves
+
+During any match, press **F9** to toggle the collision overlay: yellow
+capsules are hurtboxes (blue while intangible), the white square marks the
+fighter origin, and active hitboxes are drawn as red (sweet), orange (normal),
+or yellow (sour) circles. Adding `?hitboxes=1` to the URL starts with the
+overlay on, and `?match=<p1-id>,<p2-id>` jumps straight into a match:
+
+```text
+http://localhost:4173/?match=my-fighter,rgs-stick&hitboxes=1&items=0
+```
 
 ## Troubleshooting
 

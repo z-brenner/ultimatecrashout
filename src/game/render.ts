@@ -1,8 +1,10 @@
-import type {
-  FighterSnapshot,
-  GameSnapshot,
-  ItemSnapshot,
-  ProjectileSnapshot,
+import {
+  fighterHurtboxProfile,
+  type DebugHitbox,
+  type FighterSnapshot,
+  type GameSnapshot,
+  type ItemSnapshot,
+  type ProjectileSnapshot,
 } from "./engine";
 import type { FighterId, GameSettings, PlayerSlot, StageId } from "./contracts";
 import {
@@ -474,6 +476,7 @@ export class GameRenderer {
   private camera = { x: 0, y: 110, zoom: 1 };
   private cameraGoal = { x: 0, y: 110, zoom: 1 };
   private shake = 0;
+  private debugHitboxes: readonly DebugHitbox[] | null = null;
   private flash = 0;
   private flashColor = "#ffffff";
   private goTimer = 0;
@@ -711,6 +714,7 @@ export class GameRenderer {
     ctx.save();
     ctx.translate(shakeX, shakeY);
     this.drawWorld(snapshot, !nativeStageReady);
+    if (this.debugHitboxes) this.drawCollisionDebug(snapshot, this.debugHitboxes);
     this.drawCountdown(snapshot);
     this.drawGo();
     ctx.restore();
@@ -803,6 +807,60 @@ export class GameRenderer {
         ? CAMERA_MAX_ZOOM_OUT_SPEED
         : CAMERA_MAX_ZOOM_IN_SPEED,
     );
+  }
+
+  /** Pass the engine's live hitboxes to draw the collision overlay, or null to hide it. */
+  setDebugHitboxes(hitboxes: readonly DebugHitbox[] | null): void {
+    this.debugHitboxes = hitboxes;
+  }
+
+  private drawCollisionDebug(snapshot: GameSnapshot, hitboxes: readonly DebugHitbox[]): void {
+    const ctx = this.context;
+    const zoom = this.camera.zoom;
+    ctx.save();
+    ctx.lineWidth = 2;
+    for (const fighter of snapshot.fighters) {
+      if (fighter.state === "ko" || fighter.respawnFrames > 0) continue;
+      const profile = fighterHurtboxProfile(
+        fighter.size,
+        fighter.statusEffect === "bury" ? "crouch" : fighter.state,
+      );
+      const center = this.worldToScreen({
+        x: fighter.position.x,
+        y: fighter.position.y + profile.centerOffsetY,
+      });
+      const radius = profile.radius * zoom;
+      const segment = Math.max(0, profile.halfHeight - profile.radius) * zoom;
+      const intangible = fighter.invulnerableFrames > 0;
+      ctx.fillStyle = intangible ? "rgba(120, 220, 255, 0.16)" : "rgba(255, 230, 80, 0.2)";
+      ctx.strokeStyle = intangible ? "rgba(120, 220, 255, 0.9)" : "rgba(255, 230, 80, 0.9)";
+      ctx.beginPath();
+      ctx.arc(center.x, center.y - segment, radius, Math.PI, 0);
+      ctx.lineTo(center.x + radius, center.y + segment);
+      ctx.arc(center.x, center.y + segment, radius, 0, Math.PI);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      const feet = this.worldToScreen(fighter.position);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(feet.x - 3, feet.y - 3, 6, 6);
+    }
+    const colors: Record<DebugHitbox["kind"], string> = {
+      sweet: "255, 60, 70",
+      normal: "255, 150, 40",
+      sour: "255, 220, 90",
+    };
+    for (const hitbox of hitboxes) {
+      const center = this.worldToScreen(hitbox.position);
+      const color = colors[hitbox.kind];
+      ctx.fillStyle = `rgba(${color}, 0.35)`;
+      ctx.strokeStyle = `rgba(${color}, 0.95)`;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, hitbox.radius * zoom, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   private worldToScreen(position: Vec2): Vec2 {

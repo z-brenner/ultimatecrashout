@@ -78,6 +78,90 @@ const validateCommon = (pack, directoryName) => {
   }
 };
 
+const THROW_NAMES = new Set(["forward", "back", "up", "down"]);
+const finite = (value) => typeof value === "number" && Number.isFinite(value);
+const nonNegative = (value) => finite(value) && value >= 0;
+const nonNegativeInteger = (value) => Number.isInteger(value) && value >= 0;
+const isVec2 = (value) => isObject(value) && finite(value.x) && finite(value.y);
+const ATTACK_FIELD_CHECKS = {
+  label: [nonEmpty, "a non-empty string"],
+  startup: [positiveInteger, "a positive integer (frames)"],
+  active: [positiveInteger, "a positive integer (frames)"],
+  recovery: [nonNegativeInteger, "a non-negative integer (frames)"],
+  damage: [nonNegative, "a non-negative number"],
+  angle: [finite, "a number (degrees)"],
+  baseKnockback: [nonNegative, "a non-negative number"],
+  knockbackGrowth: [nonNegative, "a non-negative number"],
+  hitstop: [nonNegativeInteger, "a non-negative integer (frames)"],
+  hitstun: [nonNegativeInteger, "a non-negative integer (frames)"],
+  radius: [positive, "a positive number"],
+  offset: [isVec2, "an {x, y} vector"],
+  shieldDamage: [nonNegative, "a non-negative number"],
+  chargeable: [(value) => typeof value === "boolean", "a boolean"],
+  maxChargeFrames: [positiveInteger, "a positive integer (frames)"],
+  movement: [isVec2, "an {x, y} vector"],
+  airMovement: [isVec2, "an {x, y} vector"],
+  selfDamage: [nonNegative, "a non-negative number"],
+  multiHit: [positiveInteger, "a positive integer"],
+  hitboxes: [Array.isArray, "an array"],
+};
+const HITBOX_KINDS = new Set(["sweet", "normal", "sour"]);
+
+const validateHitbox = (id, where, hitbox) => {
+  assert(isObject(hitbox), `${id}: ${where} must be an object`);
+  assert(isVec2(hitbox.offset), `${id}: ${where}.offset must be an {x, y} vector`);
+  assert(positive(hitbox.radius), `${id}: ${where}.radius must be a positive number`);
+  assert(hitbox.endOffset === undefined || isVec2(hitbox.endOffset), `${id}: ${where}.endOffset must be an {x, y} vector`);
+  for (const key of ["activeStart", "activeEnd"]) {
+    assert(hitbox[key] === undefined || nonNegativeInteger(hitbox[key]), `${id}: ${where}.${key} must be a non-negative integer`);
+  }
+  assert(hitbox.activeStart === undefined || hitbox.activeEnd === undefined || hitbox.activeEnd >= hitbox.activeStart,
+    `${id}: ${where}.activeEnd is before activeStart`);
+  for (const key of ["damageMultiplier", "knockbackMultiplier"]) {
+    assert(hitbox[key] === undefined || nonNegative(hitbox[key]), `${id}: ${where}.${key} must be a non-negative number`);
+  }
+  assert(hitbox.priority === undefined || finite(hitbox.priority), `${id}: ${where}.priority must be a number`);
+  assert(hitbox.kind === undefined || HITBOX_KINDS.has(hitbox.kind), `${id}: ${where}.kind must be sweet, normal, or sour`);
+};
+
+const validateGameplayOverrides = (id, gameplay) => {
+  if (gameplay.attacks !== undefined) {
+    assert(isObject(gameplay.attacks), `${id}: gameplay.attacks must be an object`);
+    for (const [move, override] of Object.entries(gameplay.attacks)) {
+      assert(MOVE_NAMES.has(move), `${id}: unknown move gameplay.attacks.${move}`);
+      assert(isObject(override), `${id}: gameplay.attacks.${move} must be an object`);
+      for (const [field, value] of Object.entries(override)) {
+        const check = ATTACK_FIELD_CHECKS[field];
+        // Less common mechanics (projectiles, specialMovement, counters…) are
+        // typed by the engine; the generic checks cover the frame-data core.
+        if (!check) continue;
+        assert(check[0](value), `${id}: gameplay.attacks.${move}.${field} must be ${check[1]}`);
+      }
+      for (const [index, hitbox] of (override.hitboxes ?? []).entries()) {
+        validateHitbox(id, `gameplay.attacks.${move}.hitboxes[${index}]`, hitbox);
+      }
+    }
+  }
+  if (gameplay.throws !== undefined) {
+    assert(isObject(gameplay.throws), `${id}: gameplay.throws must be an object`);
+    for (const [name, override] of Object.entries(gameplay.throws)) {
+      assert(THROW_NAMES.has(name), `${id}: unknown throw gameplay.throws.${name}`);
+      assert(isObject(override), `${id}: gameplay.throws.${name} must be an object`);
+      for (const [field, value] of Object.entries(override)) {
+        assert(["damage", "angle", "baseKnockback", "knockbackGrowth"].includes(field),
+          `${id}: unknown field gameplay.throws.${name}.${field}`);
+        assert(field === "angle" ? finite(value) : nonNegative(value),
+          `${id}: gameplay.throws.${name}.${field} must be a ${field === "angle" ? "number" : "non-negative number"}`);
+      }
+    }
+  }
+  assert(gameplay.maxJumps === undefined || (positiveInteger(gameplay.maxJumps) && gameplay.maxJumps <= 6),
+    `${id}: gameplay.maxJumps must be an integer from 1 to 6`);
+  for (const key of ["shieldHealth", "shieldRegen", "traction", "airAcceleration"]) {
+    assert(gameplay[key] === undefined || positive(gameplay[key]), `${id}: invalid gameplay.${key}`);
+  }
+};
+
 const validateReadyPack = (pack, render, config) => {
   const { id, gameplay, visual, effects } = pack;
   assert(isObject(gameplay), `${id}: gameplay is missing`);
@@ -104,6 +188,7 @@ const validateReadyPack = (pack, render, config) => {
     assert(nonEmpty(definition.label), `${id}: ${special} label is missing`);
     assert(typeof definition.damage === "number" && definition.damage >= 0, `${id}: invalid ${special} damage`);
   }
+  validateGameplayOverrides(id, gameplay);
 
   assert(isObject(visual), `${id}: visual is missing`);
   assert(visual.sourceFacing === "left" || visual.sourceFacing === "right", `${id}: invalid sourceFacing`);

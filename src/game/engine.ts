@@ -176,6 +176,15 @@ export const comboStarterBaseKnockbackScale = (
   ? 0.76 + Math.min(1, Math.max(0, percent) / 80) * 0.24
   : 1;
 
+export interface DebugHitbox {
+  slot: PlayerSlot;
+  move: MoveName;
+  position: Vec2;
+  radius: number;
+  kind: ActiveMeleeHitbox["kind"];
+  priority: number;
+}
+
 export interface ActiveMeleeHitbox {
   offset: Vec2;
   radius: number;
@@ -3362,6 +3371,37 @@ export class CombatGame {
     const correction = (minimumDistance - Math.abs(delta)) / 2;
     first.position.x -= direction * correction;
     second.position.x += direction * correction;
+  }
+
+  /**
+   * Melee hitboxes that can connect on the current frame, in world space.
+   * Read-only helper for debug overlays; it mirrors the gating used by
+   * resolveMeleeHits but ignores per-target rehit bookkeeping.
+   */
+  debugActiveHitboxes(): DebugHitbox[] {
+    const result: DebugHitbox[] = [];
+    for (const fighter of this.fighters) {
+      const action = fighter.action;
+      if (!action || action.charging) continue;
+      const move = fighter.definition.attacks[action.name];
+      if (
+        (move.projectile && !move.alsoMelee) ||
+        move.counters ||
+        (move.damage <= 0 && (move.absorbsProjectiles || move.reflectsProjectiles))
+      ) continue;
+      if (action.frame < move.startup || action.frame > move.startup + move.active - 1) continue;
+      for (const hitbox of this.activeWorldHitboxes(fighter, action, move)) {
+        result.push({
+          slot: fighter.slot,
+          move: action.name,
+          position: hitbox.position,
+          radius: hitbox.radius,
+          kind: hitbox.kind,
+          priority: hitbox.priority,
+        });
+      }
+    }
+    return result;
   }
 
   private activeWorldHitboxes(

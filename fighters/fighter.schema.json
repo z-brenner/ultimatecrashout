@@ -86,6 +86,60 @@
             "up-special": { "$ref": "#/$defs/special" },
             "down-special": { "$ref": "#/$defs/special" }
           }
+        },
+        "attacks": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "jab": { "$ref": "#/$defs/attackOverride" },
+            "dash-attack": { "$ref": "#/$defs/attackOverride" },
+            "forward-tilt": { "$ref": "#/$defs/attackOverride" },
+            "up-tilt": { "$ref": "#/$defs/attackOverride" },
+            "down-tilt": { "$ref": "#/$defs/attackOverride" },
+            "forward-smash": { "$ref": "#/$defs/attackOverride" },
+            "up-smash": { "$ref": "#/$defs/attackOverride" },
+            "down-smash": { "$ref": "#/$defs/attackOverride" },
+            "neutral-air": { "$ref": "#/$defs/attackOverride" },
+            "forward-air": { "$ref": "#/$defs/attackOverride" },
+            "back-air": { "$ref": "#/$defs/attackOverride" },
+            "up-air": { "$ref": "#/$defs/attackOverride" },
+            "down-air": { "$ref": "#/$defs/attackOverride" },
+            "neutral-special": { "$ref": "#/$defs/attackOverride" },
+            "side-special": { "$ref": "#/$defs/attackOverride" },
+            "up-special": { "$ref": "#/$defs/attackOverride" },
+            "down-special": { "$ref": "#/$defs/attackOverride" }
+          }
+        },
+        "throws": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "forward": { "$ref": "#/$defs/throwOverride" },
+            "back": { "$ref": "#/$defs/throwOverride" },
+            "up": { "$ref": "#/$defs/throwOverride" },
+            "down": { "$ref": "#/$defs/throwOverride" }
+          }
+        },
+        "maxJumps": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "shieldHealth": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Shield hit points; defaults from weight."
+        },
+        "shieldRegen": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Shield regeneration per second; defaults from weight."
+        },
+        "traction": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Ground friction in Melee units/frame²; defaults to 0.065 (0.075 for weight ≥ 115)."
+        },
+        "airAcceleration": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Air acceleration in Melee units/frame²; defaults to max(0.035, air × 0.05)."
         }
       }
     },
@@ -116,7 +170,16 @@
         "materials": {
           "type": "object",
           "additionalProperties": {
-            "enum": ["physical", "blade", "heavy", "fire", "electric", "energy", "wind", "water"]
+            "enum": [
+              "physical",
+              "blade",
+              "heavy",
+              "fire",
+              "electric",
+              "energy",
+              "wind",
+              "water"
+            ]
           }
         },
         "traits": {
@@ -137,6 +200,81 @@
         "damage": { "type": "number", "minimum": 0 }
       },
       "additionalProperties": true
+    },
+    "vec2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "hitbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["offset", "radius"],
+      "description": "One hit bubble in fighter-local space (x points forward, y up). Frames count from the first active frame.",
+      "properties": {
+        "offset": { "$ref": "#/$defs/vec2" },
+        "endOffset": {
+          "$ref": "#/$defs/vec2",
+          "description": "Optional position at activeEnd; the bubble sweeps linearly from offset."
+        },
+        "radius": { "type": "number", "exclusiveMinimum": 0 },
+        "activeStart": { "type": "integer", "minimum": 0 },
+        "activeEnd": { "type": "integer", "minimum": 0 },
+        "damageMultiplier": { "type": "number", "minimum": 0 },
+        "knockbackMultiplier": { "type": "number", "minimum": 0 },
+        "priority": {
+          "type": "number",
+          "description": "Higher numbers win when several bubbles touch the target (default 1)."
+        },
+        "kind": { "enum": ["sweet", "normal", "sour"] }
+      }
+    },
+    "attackOverride": {
+      "type": "object",
+      "description": "Authored values for one move. Omitted fields keep the generated value. Values are absolute: power/speed/reach do not rescale them.",
+      "additionalProperties": true,
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "startup": { "type": "integer", "minimum": 1 },
+        "active": { "type": "integer", "minimum": 1 },
+        "recovery": { "type": "integer", "minimum": 0 },
+        "damage": { "type": "number", "minimum": 0 },
+        "angle": {
+          "type": "number",
+          "description": "Launch angle in degrees; 0 is forward, 90 is straight up."
+        },
+        "baseKnockback": { "type": "number", "minimum": 0 },
+        "knockbackGrowth": { "type": "number", "minimum": 0 },
+        "hitstop": { "type": "integer", "minimum": 0 },
+        "hitstun": { "type": "integer", "minimum": 0 },
+        "radius": { "type": "number", "exclusiveMinimum": 0 },
+        "offset": { "$ref": "#/$defs/vec2" },
+        "shieldDamage": { "type": "number", "minimum": 0 },
+        "chargeable": { "type": "boolean" },
+        "maxChargeFrames": { "type": "integer", "minimum": 1 },
+        "movement": { "$ref": "#/$defs/vec2" },
+        "airMovement": { "$ref": "#/$defs/vec2" },
+        "selfDamage": { "type": "number", "minimum": 0 },
+        "multiHit": { "type": "integer", "minimum": 1 },
+        "hitboxes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/hitbox" }
+        }
+      }
+    },
+    "throwOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "damage": { "type": "number", "minimum": 0 },
+        "angle": { "type": "number" },
+        "baseKnockback": { "type": "number", "minimum": 0 },
+        "knockbackGrowth": { "type": "number", "minimum": 0 }
+      }
     }
   }
 }

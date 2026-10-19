@@ -297,6 +297,13 @@ const characterSelectCursors = new CharacterSelectCursors(root, {
 });
 
 const localMatchParams = new URLSearchParams(window.location.search);
+// Authoring aid: F9 (or ?hitboxes=1) draws live hurtboxes and hitboxes.
+let showHitboxes = localMatchParams.get("hitboxes") === "1";
+window.addEventListener("keydown", (event) => {
+  if (event.code !== "F9" || event.repeat) return;
+  event.preventDefault();
+  showHitboxes = !showHitboxes;
+});
 const localMatchFighters = localMatchParams.get("match")?.split(",");
 if (
   localMatchFighters?.length === 2 &&
@@ -521,6 +528,7 @@ const tick = (timestamp: number): void => {
     // A slow display frame can advance several fixed simulation ticks. Audio
     // consumes each tick immediately; the renderer needs the same accumulated
     // stream or short-lived hits, jumps and dust cues disappear visually.
+    renderer?.setDebugHitboxes(showHitboxes ? game.debugActiveHitboxes() : null);
     renderer?.render({ ...snapshot, events: frameEvents }, paused ? 0 : elapsed, settings);
     recordPerformanceSample(timestamp, snapshot);
     updateHud(snapshot, timestamp);

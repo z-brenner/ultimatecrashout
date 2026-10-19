@@ -191,3 +191,43 @@ export const buildStandardAttacks = (
     "down-special": special("down-special"),
   };
 };
+
+/** Authored per-move overrides from a fighter pack; values are absolute, not scaled. */
+export type AttackOverrides = Readonly<Partial<Record<MoveName, Partial<AttackDefinition>>>>;
+export type ThrowOverrides = Readonly<Partial<Record<ThrowName, Partial<ThrowDefinition>>>>;
+
+/**
+ * Layers a pack's authored move data over the generated kit. Omitted fields
+ * keep the generated value, so a pack can retune one knob or author a move
+ * completely (including its hitbox chain).
+ */
+export const applyAttackOverrides = (
+  attacks: Record<MoveName, AttackDefinition>,
+  overrides: AttackOverrides = {},
+): Record<MoveName, AttackDefinition> => {
+  const result = { ...attacks };
+  for (const [name, override] of Object.entries(overrides) as [MoveName, Partial<AttackDefinition>][]) {
+    if (!override || !(name in result)) continue;
+    const base = result[name];
+    const damage = override.damage ?? base.damage;
+    result[name] = {
+      ...base,
+      // Derived defaults follow an authored damage change unless authored too.
+      hitstop: override.damage === undefined ? base.hitstop : Math.max(3, Math.round(damage * 0.45)),
+      shieldDamage: override.damage === undefined ? base.shieldDamage : damage * 0.75 + 2,
+      ...override,
+    };
+  }
+  return result;
+};
+
+export const applyThrowOverrides = (
+  throws: Record<ThrowName, ThrowDefinition>,
+  overrides: ThrowOverrides = {},
+): Record<ThrowName, ThrowDefinition> => {
+  const result = { ...throws };
+  for (const [name, override] of Object.entries(overrides) as [ThrowName, Partial<ThrowDefinition>][]) {
+    if (override && name in result) result[name] = { ...result[name], ...override };
+  }
+  return result;
+};
