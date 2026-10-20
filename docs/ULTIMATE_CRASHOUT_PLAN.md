@@ -80,9 +80,11 @@ Ordered by how much they constrain the goals.
 14. **Audio is shared** by every fighter; packs cannot declare voices or SFX.
 15. ~~`website/` was the upstream marketing site.~~ Removed; GitHub Pages
     serves the game directly.
-16. **Tooling**: `npm audit fix`/`npm install vitest@…` crash in npm's resolver
-    ("edgesOut"); a moderate vitest advisory remains until the lockfile is
-    regenerated.
+16. **Tooling**: npm 10's resolver crashes ("Cannot read properties of null
+    (reading 'edgesOut')", in `#loadPeerSet`) on `npm update`/`npm install
+    <pkg>` for this tree. Workaround: update dependencies with npm 11
+    (`npx npm@11 update <pkg>`); the lockfile stays v3 and `npm ci` with npm
+    10 installs it unchanged. `npm audit` is clean as of the vite 8.3 bump.
 17. **Placeholder art**: Buckle and Crash Course are procedural stand-ins,
     and the logo mark is still the inherited "fold" motif.
 18. **Naming risk**: no trademark clearance for "Ultimate Crashout"; see
