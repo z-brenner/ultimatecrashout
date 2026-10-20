@@ -7,6 +7,11 @@ import type {
 } from "./contracts";
 import {
   ASDI_DISTANCE,
+  AUTO_CANCEL_LANDING_FRAMES,
+  aerialAutoCancelled,
+  aerialLandingLagFrames,
+  landingLagFramesForAttack,
+  moveFrameWindowActive,
   LEDGE_MAX_HANG_FRAMES,
   SDI_DISTANCE,
   TECH_INPUT_LOCKOUT_FRAMES,
@@ -1017,5 +1022,170 @@ describe("authored move data", () => {
     const game = createGame(matchConfig(), { countdownFrames: 0 });
     settle(game);
     expect(game.debugActiveHitboxes()).toEqual([]);
+  });
+});
+
+describe("authored move timing", () => {
+  /** Temporarily replaces one fighter's move, restoring it afterwards. */
+  const withMove = <T>(
+    fighter: FighterId,
+    move: MoveName,
+    changes: Partial<AttackDefinition>,
+    run: () => T,
+  ): T => {
+    const definition = getFighterDefinition(fighter);
+    const original = definition.attacks[move];
+    definition.attacks[move] = { ...original, ...changes };
+    try {
+      return run();
+    } finally {
+      definition.attacks[move] = original;
+    }
+  };
+
+  /**
+   * P2 (george) starts a slow jab that never becomes active in time; P1
+   * (kaykit-knight) jabs into it. Returns P2's state once P1's jab is over.
+   */
+  const jabIntoSlowMove = () => {
+    const game = createGame(matchConfig(), {
+      countdownFrames: 0,
+      spawnPositions: [{ x: -30, y: 60 }, { x: 30, y: 60 }],
+    });
+    settle(game);
+    game.step([createEmptyInput(), input({ held: ["attack"], pressed: ["attack"] })]);
+    game.step([input({ held: ["attack"], pressed: ["attack"] }), createEmptyInput()]);
+    const events: GameEvent[] = [];
+    for (let frame = 0; frame < 14; frame += 1) events.push(...game.step(idlePair()).events);
+    return { target: game.getSnapshot().fighters[1], events };
+  };
+  const slowJab: Partial<AttackDefinition> = { startup: 40, active: 1, recovery: 4 };
+
+  it("uses authored landing lag and the auto-cancel windows", () => {
+    const nair = getFighterDefinition("kaykit-knight").attacks["neutral-air"];
+    expect(landingLagFramesForAttack({ ...nair, landingLag: 21 })).toBe(21);
+    expect(landingLagFramesForAttack(nair)).toBe(landingLagFramesForAttack({ ...nair }));
+    const window = { autoCancel: { before: 3, after: 20 } };
+    expect(aerialAutoCancelled(window, 2)).toBe(true);
+    expect(aerialAutoCancelled(window, 3)).toBe(false);
+    expect(aerialAutoCancelled(window, 19)).toBe(false);
+    expect(aerialAutoCancelled(window, 20)).toBe(true);
+    expect(aerialAutoCancelled({}, 0)).toBe(false);
+    expect(AUTO_CANCEL_LANDING_FRAMES).toBeLessThan(landingLagFramesForAttack(nair));
+  });
+
+  it("never lets an auto-cancel window make an L-cancel worse", () => {
+    const nair = getFighterDefinition("kaykit-knight").attacks["neutral-air"];
+    const shortLag = { ...nair, landingLag: 6, autoCancel: { after: 10 } };
+    // In the window: L-cancel (3) beats the auto-cancel landing (4).
+    expect(aerialLandingLagFrames(shortLag, 12, true)).toBe(3);
+    expect(aerialLandingLagFrames(shortLag, 12, false)).toBe(AUTO_CANCEL_LANDING_FRAMES);
+    // Outside the window only the L-cancel applies.
+    expect(aerialLandingLagFrames(shortLag, 5, true)).toBe(3);
+    expect(aerialLandingLagFrames(shortLag, 5, false)).toBe(6);
+    // A long landing lag: auto-cancel (4) beats the L-cancel (10).
+    const longLag = { ...nair, landingLag: 20, autoCancel: { after: 10 } };
+    expect(aerialLandingLagFrames(longLag, 12, true)).toBe(AUTO_CANCEL_LANDING_FRAMES);
+  });
+
+  it("reads move frame windows inclusively", () => {
+    expect(moveFrameWindowActive({ start: 2, end: 4 }, 1)).toBe(false);
+    expect(moveFrameWindowActive({ start: 2, end: 4 }, 2)).toBe(true);
+    expect(moveFrameWindowActive({ start: 2, end: 4 }, 4)).toBe(true);
+    expect(moveFrameWindowActive({ start: 2, end: 4 }, 5)).toBe(false);
+    expect(moveFrameWindowActive(undefined, 0)).toBe(false);
+  });
+
+  it("lets a move's intangible window ignore hits", () => {
+    const control = withMove("george", "jab", slowJab, jabIntoSlowMove);
+    expect(control.target.percent).toBeGreaterThan(0);
+
+    const intangible = withMove("george", "jab", { ...slowJab, intangible: { start: 0, end: 39 } }, jabIntoSlowMove);
+    expect(intangible.target.percent).toBe(0);
+    expect(intangible.target.intangible).toBe(true);
+    expect(intangible.target.currentMove).toBe("jab");
+  });
+
+  it("lets super armor take damage without interrupting the move", () => {
+    const control = withMove("george", "jab", slowJab, jabIntoSlowMove);
+    expect(control.target.currentMove).toBeNull();
+
+    const armored = withMove("george", "jab", { ...slowJab, superArmor: { start: 0, end: 39 } }, jabIntoSlowMove);
+    expect(armored.target.percent).toBeGreaterThan(0);
+    expect(armored.target.currentMove).toBe("jab");
+    expect(armored.target.state).not.toBe("hitstun");
+    expect(armored.target.armored).toBe(true);
+    expect(armored.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "hit", target: 1, armored: true }),
+    ]));
+  });
+
+  it("launches with a hitbox's own angle and knockback", () => {
+    const launch = (hitbox: Record<string, number>) =>
+      withMove("kaykit-knight", "jab", {
+        hitboxes: [{ offset: { x: 30, y: 4 }, radius: 30, ...hitbox }],
+      }, () => {
+        const game = createGame(matchConfig(), {
+          countdownFrames: 0,
+          spawnPositions: [{ x: -30, y: 60 }, { x: 30, y: 60 }],
+        });
+        settle(game);
+        game.step([input({ held: ["attack"], pressed: ["attack"] }), createEmptyInput()]);
+        let peak = { x: 0, y: 0 };
+        for (let frame = 0; frame < 30; frame += 1) {
+          const { velocity } = game.step(idlePair()).fighters[1];
+          if (Math.hypot(velocity.x, velocity.y) > Math.hypot(peak.x, peak.y)) peak = velocity;
+        }
+        return peak;
+      });
+    const sideways = launch({ angle: 0, baseKnockback: 140, knockbackGrowth: 0 });
+    const upward = launch({ angle: 90, baseKnockback: 140, knockbackGrowth: 0 });
+    expect(Math.abs(sideways.x)).toBeGreaterThan(Math.abs(sideways.y));
+    expect(upward.y).toBeGreaterThan(Math.abs(upward.x));
+  });
+
+  it("does not apply frame windows while a smash is charging", () => {
+    withMove("kaykit-knight", "forward-smash", { intangible: { start: 0, end: 0 } }, () => {
+      const game = createGame(matchConfig(), { countdownFrames: 0 });
+      settle(game);
+      // Smash input: flick and attack together, then keep holding attack.
+      game.step([
+        input({ held: ["right", "attack"], pressed: ["right", "attack"], direction: { x: 1, y: 0 }, analog: true }),
+        createEmptyInput(),
+      ]);
+      let charging = 0;
+      for (let frame = 0; frame < 20; frame += 1) {
+        const p1 = game.step([input({ held: ["attack"] }), createEmptyInput()]).fighters[0];
+        if (p1.currentMove === "forward-smash" && p1.charge > 0) {
+          charging += 1;
+          expect(p1.intangible).toBe(false);
+        }
+      }
+      expect(charging).toBeGreaterThan(5);
+    });
+  });
+
+  it("lets super armor absorb launching items", () => {
+    withMove("george", "jab", { ...slowJab, superArmor: { start: 0, end: 39 } }, () => {
+      const game = createGame(matchConfig(), { countdownFrames: 0 });
+      settle(game);
+      game.step([createEmptyInput(), input({ held: ["attack"], pressed: ["attack"] })]);
+      game.step(idlePair());
+      const internals = game as unknown as {
+        fighters: [unknown, unknown];
+        applyActivatedItem(item: unknown, target: unknown, input: InputFrame): boolean;
+      };
+      const before = game.getSnapshot().fighters[1];
+      const consumed = internals.applyActivatedItem(
+        { kind: "blast-core", owner: 0, position: { x: before.position.x - 20, y: before.position.y } },
+        internals.fighters[1],
+        createEmptyInput(),
+      );
+      const after = game.getSnapshot().fighters[1];
+      expect(consumed).toBe(true);
+      expect(after.percent).toBeGreaterThan(before.percent);
+      expect(after.currentMove).toBe("jab");
+      expect(after.state).not.toBe("hitstun");
+    });
   });
 });

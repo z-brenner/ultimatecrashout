@@ -154,6 +154,22 @@ export interface AttackDefinition {
   statusFrames?: number;
   requiresFacingTarget?: boolean;
   reversesFacing?: boolean;
+  /** Aerials only: landing lag frames (halved by an L-cancel). Defaults from recovery. */
+  landingLag?: number;
+  /**
+   * Aerials only: landing before move frame `before`, or on/after frame
+   * `after`, uses the short auto-cancel landing instead of landingLag.
+   */
+  autoCancel?: { before?: number; after?: number };
+  /** Move frames (0 = first frame, inclusive) during which nothing can hit or grab the user. */
+  intangible?: MoveFrameWindow;
+  /** Move frames during which hits deal damage but do not flinch or launch the user. */
+  superArmor?: MoveFrameWindow;
+}
+
+export interface MoveFrameWindow {
+  start: number;
+  end: number;
 }
 
 export interface AttackHitboxDefinition {
@@ -166,6 +182,12 @@ export interface AttackHitboxDefinition {
   knockbackMultiplier?: number;
   priority?: number;
   kind?: "sweet" | "normal" | "sour";
+  /** Launch angle for hits from this bubble; defaults to the move's angle. */
+  angle?: number;
+  /** Base knockback for hits from this bubble; defaults to the move's value. */
+  baseKnockback?: number;
+  /** Knockback growth for hits from this bubble; defaults to the move's value. */
+  knockbackGrowth?: number;
 }
 
 export interface ThrowDefinition {

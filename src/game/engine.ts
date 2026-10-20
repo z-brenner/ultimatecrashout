@@ -192,7 +192,41 @@ export interface ActiveMeleeHitbox {
   knockbackMultiplier: number;
   priority: number;
   kind: "sweet" | "normal" | "sour";
+  angle?: number;
+  baseKnockback?: number;
+  knockbackGrowth?: number;
 }
+
+/** Activated item effects that flinch or launch, and that super armor absorbs. */
+const ARMOR_ABSORBED_ITEM_EFFECTS = new Set<string>([
+  "bomb",
+  "proximity-bomb",
+  "shell",
+  "slip-trap",
+  "bumper",
+  "bury",
+  "stun",
+]);
+
+/** Frames of landing lag when an aerial lands inside an auto-cancel window. */
+export const AUTO_CANCEL_LANDING_FRAMES = 4;
+
+/** True when `frame` (0 = first move frame) falls inside an authored window. */
+export const moveFrameWindowActive = (
+  window: Readonly<{ start: number; end: number }> | undefined,
+  frame: number,
+): boolean => Boolean(window && frame >= window.start && frame <= window.end);
+
+/** Whether an aerial landing at `frame` falls inside its auto-cancel window. */
+export const aerialAutoCancelled = (
+  attack: Pick<AttackDefinition, "autoCancel">,
+  frame: number,
+): boolean => {
+  const window = attack.autoCancel;
+  if (!window) return false;
+  return (window.before !== undefined && frame < window.before) ||
+    (window.after !== undefined && frame >= window.after);
+};
 
 const activeAuthoredHitboxes = (
   hitboxes: readonly AttackHitboxDefinition[],
@@ -214,6 +248,9 @@ const activeAuthoredHitboxes = (
     knockbackMultiplier: hitbox.knockbackMultiplier ?? 1,
     priority: hitbox.priority ?? 1,
     kind: hitbox.kind ?? "normal",
+    angle: hitbox.angle,
+    baseKnockback: hitbox.baseKnockback,
+    knockbackGrowth: hitbox.knockbackGrowth,
   }];
 });
 
@@ -430,6 +467,10 @@ export interface FighterSnapshot {
   shield: number;
   maxShield: number;
   invulnerableFrames: number;
+  /** Cannot be hit or grabbed this frame (timed invulnerability or an intangible move window). */
+  intangible: boolean;
+  /** Inside a super-armor move window this frame. */
+  armored: boolean;
   currentMove: MoveName | null;
   moveFrame: number;
   specialPhase: "startup" | "active" | "recovery" | "landing" | null;
@@ -523,6 +564,8 @@ export interface GameEvent {
   entityId?: number;
   lCancelled?: boolean;
   wavedash?: boolean;
+  /** The hit landed on super armor: damage applied, no flinch or launch. */
+  armored?: boolean;
   techKind?: "neutral" | "roll-left" | "roll-right" | "wall-left" | "wall-right" | "ceiling";
   winner?: PlayerSlot;
   sound?: string;
@@ -974,7 +1017,25 @@ const sdiRegionForDirection = (direction: Vec2): number | null => {
 };
 
 export const landingLagFramesForAttack = (attack: AttackDefinition): number =>
-  clamp(Math.round(attack.recovery * 0.42), 6, 16);
+  attack.landingLag ?? clamp(Math.round(attack.recovery * 0.42), 6, 16);
+
+/**
+ * Landing lag when an aerial touches down on move frame `frame`. Auto-cancel
+ * and L-cancel each shorten the landing; whichever is shorter applies, so
+ * authoring an auto-cancel window can never make an L-cancel worse.
+ */
+export const aerialLandingLagFrames = (
+  attack: AttackDefinition,
+  frame: number,
+  lCancelled: boolean,
+): number => {
+  const base = landingLagFramesForAttack(attack);
+  return Math.min(
+    base,
+    aerialAutoCancelled(attack, frame) ? AUTO_CANCEL_LANDING_FRAMES : base,
+    lCancelled ? Math.floor(base / 2) : base,
+  );
+};
 
 const withoutEdges = (input: InputFrame): InputFrame => ({
   held: input.held,
@@ -2697,12 +2758,12 @@ export class CombatGame {
           fighter.landingLagFrames = WAVEDASH_LANDING_LAG_FRAMES;
           fighter.state = "crouch";
         } else if (landingAction && AERIAL_NORMALS.has(landingAction.name)) {
-          const baseLandingLag = landingLagFramesForAttack(
-            fighter.definition.attacks[landingAction.name],
+          const landingAttack = fighter.definition.attacks[landingAction.name];
+          fighter.landingLagFrames = aerialLandingLagFrames(
+            landingAttack,
+            landingAction.frame,
+            lCancelled,
           );
-          fighter.landingLagFrames = lCancelled
-            ? Math.floor(baseLandingLag / 2)
-            : baseLandingLag;
           fighter.action = null;
           fighter.state = "crouch";
         }
@@ -3124,7 +3185,7 @@ export class CombatGame {
       horizontal > -8 &&
       horizontal < 86 &&
       vertical < (fighter.definition.size.height + target.definition.size.height) * 0.46 &&
-      target.invulnerableFrames === 0 &&
+      !this.isIntangible(target) &&
       target.state !== "ko" &&
       target.state !== "grabbed" &&
       target.state !== "ledge";
@@ -3404,6 +3465,57 @@ export class CombatGame {
     return result;
   }
 
+  /**
+   * Whether the fighter's current move is inside an authored frame window.
+   * A charge hold freezes the move frame, so windows never apply while
+   * charging; otherwise a window covering that frame would last the whole hold.
+   */
+  private inMoveWindow(fighter: FighterRuntime, key: "intangible" | "superArmor"): boolean {
+    const action = fighter.action;
+    return Boolean(action && !action.charging && moveFrameWindowActive(
+      fighter.definition.attacks[action.name][key],
+      action.frame,
+    ));
+  }
+
+  /** Timed invulnerability (respawn, dodges, ledge) or an authored intangible move window. */
+  private isIntangible(fighter: FighterRuntime): boolean {
+    return fighter.invulnerableFrames > 0 || this.inMoveWindow(fighter, "intangible");
+  }
+
+  private hasSuperArmor(fighter: FighterRuntime): boolean {
+    return this.inMoveWindow(fighter, "superArmor");
+  }
+
+  /** Armor absorbs the flinch, not the damage: the target's move keeps going. */
+  private absorbArmoredHit(
+    attacker: FighterRuntime,
+    target: FighterRuntime,
+    damage: number,
+    hitstop: number,
+    source: GameEvent["source"],
+    origin: { move?: MoveName; item?: ItemKind },
+  ): void {
+    target.percent = Math.max(0, target.percent + damage * target.defenseMultiplier);
+    attacker.hitstopFrames = Math.max(attacker.hitstopFrames, hitstop);
+    target.hitstopFrames = Math.max(target.hitstopFrames, hitstop);
+    target.lastHitBy = attacker.slot;
+    target.lastHitFrames = 600;
+    this.emit({
+      type: "hit",
+      slot: attacker.slot,
+      target: target.slot,
+      ...origin,
+      position: cloneVec(target.position),
+      value: damage,
+      damage,
+      source,
+      armored: true,
+      velocity: this.fighterWorldVelocity(target),
+      sound: "hit-light",
+    });
+  }
+
   private activeWorldHitboxes(
     fighter: FighterRuntime,
     action: ActiveMove,
@@ -3535,7 +3647,7 @@ export class CombatGame {
         (lastHitFrame !== undefined && action.frame - lastHitFrame < rehitFrames) ||
         target.state === "ko" ||
         target.state === "grabbed" ||
-        target.invulnerableFrames > 0
+        this.isIntangible(target)
       ) {
         continue;
       }
@@ -3560,10 +3672,17 @@ export class CombatGame {
       const launchScale = maximumHits > 1 && !isFinisher
         ? chargeScale * 0.16
         : chargeScale * (maximumHits > 1 ? 1 : hitbox.knockbackMultiplier);
+      // A bubble may author its own launch; the move supplies the rest.
+      const launchMove: AttackDefinition = {
+        ...effectiveMove,
+        angle: hitbox.angle ?? effectiveMove.angle,
+        baseKnockback: hitbox.baseKnockback ?? effectiveMove.baseKnockback,
+        knockbackGrowth: hitbox.knockbackGrowth ?? effectiveMove.knockbackGrowth,
+      };
       this.resolveAttackHit(
         attacker,
         target,
-        effectiveMove,
+        launchMove,
         action.name,
         inputs[target.slot],
         damageScale,
@@ -3656,6 +3775,19 @@ export class CombatGame {
         sound: "shield-hit",
       });
       if (target.shield <= 0) this.breakShield(target);
+      return;
+    }
+
+    // Like ordinary grabs, command grabs beat armor.
+    if (!move.commandGrab && this.hasSuperArmor(target)) {
+      this.absorbArmoredHit(
+        attacker,
+        target,
+        move.damage * damageScale * attacker.damageMultiplier,
+        move.hitstop,
+        source,
+        { move: moveName },
+      );
       return;
     }
 
@@ -4262,7 +4394,7 @@ export class CombatGame {
       const canHit =
         target.state !== "ko" &&
         target.state !== "grabbed" &&
-        target.invulnerableFrames === 0 &&
+        !this.isIntangible(target) &&
         landedHits < maximumHits &&
         !projectile.hitTargets.has(target.slot) &&
         (!projectile.definition.manualDetonation || projectile.detonating) &&
@@ -4497,7 +4629,11 @@ export class CombatGame {
   ): void {
     const horizontal = (target.position.x - attacker.position.x) * attacker.facing;
     const vertical = Math.abs(target.position.y - attacker.position.y);
-    if (horizontal < -18 || horizontal > reach || vertical > 105 || target.invulnerableFrames > 0) return;
+    if (horizontal < -18 || horizontal > reach || vertical > 105 || this.isIntangible(target)) return;
+    if (this.hasSuperArmor(target)) {
+      this.absorbArmoredHit(attacker, target, damage, 6, "item", {});
+      return;
+    }
     this.applyLaunch(target, attacker, damage, attacker.facing > 0 ? 36 : 144, baseKnockback, growth, 12, targetInput);
     this.emit({
       type: "hit",
@@ -4671,7 +4807,7 @@ export class CombatGame {
           : circleIntersectsFighter(target, item.position, item.radius);
         if (
           target.state !== "ko" &&
-          target.invulnerableFrames === 0 &&
+          !this.isIntangible(target) &&
           hitsTarget
         ) {
           const consumed = this.applyActivatedItem(item, target, inputs[target.slot]);
@@ -4748,6 +4884,15 @@ export class CombatGame {
     const definition = ITEM_DEFINITIONS[item.kind];
     const attacker = this.fighters[item.owner ?? 0];
     const direction = target.position.x >= item.position.x ? 1 : -1;
+    if (ARMOR_ABSORBED_ITEM_EFFECTS.has(definition.effect) && this.hasSuperArmor(target)) {
+      this.absorbArmoredHit(attacker, target, definition.amount, 6, "item", { item: item.kind });
+      // Bumpers stay in play and change owner exactly as on a normal hit.
+      if (definition.effect === "bumper") {
+        item.owner = target.slot;
+        return false;
+      }
+      return true;
+    }
     this.releaseGrabRelations(target);
     switch (definition.effect) {
       case "bomb":
@@ -4995,6 +5140,8 @@ export class CombatGame {
       shield: fighter.shield,
       maxShield: fighter.definition.shieldHealth,
       invulnerableFrames: fighter.invulnerableFrames,
+      intangible: this.isIntangible(fighter),
+      armored: this.hasSuperArmor(fighter),
       currentMove: action?.name ?? null,
       moveFrame: action?.frame ?? 0,
       specialPhase: action?.specialPhase ?? null,

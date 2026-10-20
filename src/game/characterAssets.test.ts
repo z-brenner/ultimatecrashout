@@ -81,6 +81,8 @@ const fighter = (
     shield: 100,
     maxShield: 100,
     invulnerableFrames: 0,
+    intangible: false,
+    armored: false,
     currentMove: null,
     moveFrame: 0,
     specialPhase: null,

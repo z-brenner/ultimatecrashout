@@ -48,11 +48,12 @@ Ordered by how much they constrain the goals.
    good start for lockstep or rollback netcode, but there is no state
    save/restore, no input serialization, no transport, and cross-browser
    determinism is untested. Treat online play as a project, not a task.
-4. **Move behavior still partly keyed on move names.** Landing lag is derived
-   (`recovery × 0.42`, clamped 6–16), combo-starter knockback scaling applies to
-   jab/up-tilt/down-tilt, and hitboxes have no per-bubble angle or knockback. Packs
-   cannot yet author landing lag, auto-cancel windows, per-hitbox angles,
-   armor, or intangibility frames.
+4. **Some move behavior is still keyed on move names.** Combo-starter
+   knockback scaling applies to jab/up-tilt/down-tilt, only aerials have
+   landing lag, and unauthored hitbox chains are derived per move name. Landing
+   lag, auto-cancel, intangibility, super armor, and per-hitbox launches are
+   now authorable; knockback-based armor thresholds and per-hitbox damage
+   values are not.
 5. **New special mechanics need engine code.** Packs pick from enumerated
    projectile kinds and movement types. That keeps content non-executable
    (a deliberate safety property) but limits "unique abilities".
@@ -92,9 +93,9 @@ Ordered by how much they constrain the goals.
 ### Phase 2 — make creation fast and correct (next)
 
 1. Enable Actions and get all four CI jobs green.
-2. Pack-authorable move timing: `landingLag`, `autoCancel` windows,
-   per-hitbox `angle`/`baseKnockback`/`knockbackGrowth`, `intangibleFrames`,
-   `superArmor`. These are small engine changes with clear tests.
+2. ~~Pack-authorable move timing~~ (done): `landingLag`, `autoCancel`,
+   `intangible`, `superArmor`, and per-hitbox `angle`/`baseKnockback`/
+   `knockbackGrowth`.
 3. Animation events: optional per-slot `keyFrame` (the atlas frame that should
    land on the first active frame) so art and hitboxes line up by design.
 4. Real Lab hitbox viewer: step any fighter's move frame by frame with the
