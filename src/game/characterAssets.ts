@@ -14,6 +14,7 @@ import {
 } from "./fighterVisuals";
 import { OPEN_ANIMATION_METADATA } from "./openAnimationMetadata";
 import { FIGHTER_IDS, getFighterDefinition, type MoveName } from "./roster";
+import { publicAsset } from "./publicAsset";
 
 const ALL_SKIN_IDS = ["00", "01", "02", "03"] as const satisfies readonly SkinId[];
 const DEFAULT_ANIMATION_CELL_SIZE = 192;
@@ -352,7 +353,7 @@ interface ActiveAtlasAnimation {
 }
 
 const asset = (fighter: FighterId, file: string): string =>
-  `/assets/characters/${fighter}/${file}`;
+  publicAsset(`assets/characters/${fighter}/${file}`);
 
 const sequence = (
   fighter: FighterId,

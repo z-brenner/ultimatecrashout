@@ -44,10 +44,23 @@ export const trackProblems = (page: Page): string[] => {
   page.on("response", (response) => {
     if (response.status() >= 400) problems.push(`http ${response.status()}: ${response.url()}`);
   });
+  // Every same-origin request must stay under the deployment sub-path; a
+  // root-absolute asset URL would break hosts like GitHub Pages project sites.
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (!url.protocol.startsWith("http")) return;
+    const base = new URL(page.url() || "http://invalid/");
+    if (url.origin === base.origin && !url.pathname.startsWith(deploymentBasePath)) {
+      problems.push(`outside base path: ${url.pathname}`);
+    }
+  });
   return problems;
 };
 
 export const debugApi = "__ULTIMATE_CRASHOUT__";
+
+/** Mirrors playwright.config.ts: the sub-path the build is served under. */
+export const deploymentBasePath = (process.env.E2E_BASE_PATH ?? "/ultimatecrashout/").replace(/\/?$/, "/");
 
 export const fighters = async (page: Page): Promise<FighterState[] | null> =>
   page.evaluate((api) => {

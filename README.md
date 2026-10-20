@@ -75,11 +75,24 @@ npm run build        # type-check, bundle to dist/, verify budgets and assets
 npm run preview      # serve dist/ locally
 ```
 
-`dist/` is a fully static site with no server-side code. **Serve it from a
-domain root** (Netlify, Vercel, Cloudflare Pages, or GitHub Pages with a custom
-domain): several runtime asset paths are root-absolute (`/assets/...`), so a
-sub-path deployment such as `user.github.io/ultimatecrashout/` is not supported
-yet.
+`dist/` is a fully static site with no server-side code, built with relative
+URLs, so the same build works at a domain root or under any sub-path (for
+example a GitHub Pages project site at `user.github.io/ultimatecrashout/`).
+Upload the contents of `dist/` as-is. If a host requires absolute URLs, build
+with an explicit prefix instead:
+
+```sh
+UC_BASE_PATH=/games/crashout/ npm run build
+```
+
+Pushes to `main` deploy automatically through
+`.github/workflows/pages.yml` once **Settings → Pages → Source** is set to
+**GitHub Actions** (the "Deploy from a branch" option would publish the
+unbuilt source instead).
+
+The browser tests (`npm run test:e2e`) serve the build under
+`/ultimatecrashout/` and fail on any request outside that path; set
+`E2E_BASE_PATH=/` to test the domain-root case.
 
 ## Choose a contribution
 

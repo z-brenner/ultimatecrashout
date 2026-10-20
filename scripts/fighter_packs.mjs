@@ -9,7 +9,7 @@ import {
   rename,
   writeFile,
 } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -343,7 +343,9 @@ const expandSpriteStrips = async (render, directory, slotNames) => {
   assert(positiveInteger(strips.frameWidth) && positiveInteger(strips.frameHeight),
     `${id}: spriteStrips.frameWidth and frameHeight must be positive integers`);
   const absoluteDirectory = resolve(directory, strips.directory);
-  assert(absoluteDirectory.startsWith(`${directory}/`) || absoluteDirectory === directory,
+  // path.relative is separator-agnostic, so this holds on Windows too.
+  const insidePack = relative(directory, absoluteDirectory);
+  assert(insidePack === "" || (!insidePack.startsWith("..") && !isAbsolute(insidePack)),
     `${id}: spriteStrips.directory must stay inside the fighter pack`);
   let files;
   try {

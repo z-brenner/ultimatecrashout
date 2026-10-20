@@ -77,7 +77,15 @@ const publicRuntimeBoundary: Connect.NextHandleFunction = (request, response, ne
   response.end("This path is not part of the public runtime.");
 };
 
+/**
+ * Relative by default so one build works at a domain root or any sub-path
+ * (e.g. user.github.io/ultimatecrashout/). Set UC_BASE_PATH to an absolute
+ * prefix such as "/games/crashout/" when a host needs absolute URLs.
+ */
+const deploymentBase = process.env.UC_BASE_PATH ?? "./";
+
 export default defineConfig(({ command }) => ({
+  base: command === "build" ? deploymentBase : "/",
   plugins: [{
     name: "ultimate-crashout-public-asset-boundary",
     enforce: "pre",
@@ -115,7 +123,6 @@ export default defineConfig(({ command }) => ({
       "**/node_modules/**",
       "**/dist/**",
       "**/.local-private/**",
-      "website/**",
       "e2e/**",
     ],
   },

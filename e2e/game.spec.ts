@@ -11,7 +11,7 @@ import {
 test.describe("menus", () => {
   test("boots to the title and the main menu without errors", async ({ page }) => {
     const problems = trackProblems(page);
-    await page.goto("/");
+    await page.goto("./");
     await page.locator("[data-ui-action='boot-skip']").click();
     await expect(page.locator("[data-ui-action='title-start']")).toBeVisible();
     // The start prompt pulses forever, so press Enter like a player would.
@@ -23,7 +23,7 @@ test.describe("menus", () => {
 
   test("character select lists every ready fighter pack automatically", async ({ page }) => {
     const problems = trackProblems(page);
-    await page.goto("/");
+    await page.goto("./");
     await page.locator("[data-ui-action='boot-skip']").click();
     await expect(page.locator("[data-ui-action='title-start']")).toBeVisible();
     // The start prompt pulses forever, so press Enter like a player would.
@@ -46,7 +46,7 @@ test.describe("menus", () => {
 test.describe("stage select", () => {
   test("lists every ready stage pack and starts a match on the chosen one", async ({ page }) => {
     const problems = trackProblems(page);
-    await page.goto("/");
+    await page.goto("./");
     await page.locator("[data-ui-action='boot-skip']").click();
     await expect(page.locator("[data-ui-action='title-start']")).toBeVisible();
     await page.keyboard.press("Enter");
@@ -74,7 +74,7 @@ test.describe("stage select", () => {
 test.describe("local match", () => {
   test("plays a full menu-to-match flow with two keyboard players", async ({ page }) => {
     const problems = trackProblems(page);
-    await page.goto("/");
+    await page.goto("./");
     await page.locator("[data-ui-action='boot-skip']").click();
     await expect(page.locator("[data-ui-action='title-start']")).toBeVisible();
     // The start prompt pulses forever, so press Enter like a player would.
@@ -118,7 +118,7 @@ test.describe("local match", () => {
 
   test("a landed attack deals damage", async ({ page }) => {
     const problems = trackProblems(page);
-    await page.goto("/?match=buckle,rgs-stick&items=0");
+    await page.goto("./?match=buckle,rgs-stick&items=0");
     await waitForPlaying(page);
     // Close the gap, then jab until the hit registers.
     await holdKey(page, "KeyD", 650);
@@ -131,7 +131,7 @@ test.describe("local match", () => {
 
   test("the F9 collision overlay toggles without disturbing play", async ({ page }) => {
     const problems = trackProblems(page);
-    await page.goto("/?match=buckle,rgs-stick&items=0");
+    await page.goto("./?match=buckle,rgs-stick&items=0");
     await waitForPlaying(page);
     await page.keyboard.press("F9");
     await holdKey(page, "KeyD", 200);
@@ -169,7 +169,7 @@ test.describe("controller", () => {
       });
     });
     const problems = trackProblems(page);
-    await page.goto("/?match=buckle,rgs-stick&items=0");
+    await page.goto("./?match=buckle,rgs-stick&items=0");
     await waitForPlaying(page);
     const start = await fighters(page);
 

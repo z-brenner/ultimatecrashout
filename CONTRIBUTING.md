@@ -45,8 +45,6 @@ Use the smallest relevant loop:
 - Engine or UI code: `npm test -- --watch` or a targeted Vitest file.
 - Fighter pack: `npm run fighter:build -- <id>` then `npm run fighter:check`.
 - Stage pack: `npm run stage:build` then `npm run stage:check`.
-- Website: run `npm run site:sync-game` from the repository root, then run
-  `npm test` inside `website/`.
 
 Before opening a pull request, run the complete public verification once:
 

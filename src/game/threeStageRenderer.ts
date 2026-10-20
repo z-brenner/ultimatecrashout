@@ -17,6 +17,7 @@ import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { StageId } from "./contracts";
 import { getStageDefinition } from "./stages";
+import { publicAsset } from "./publicAsset";
 
 interface StageCameraState {
   readonly x: number;
@@ -92,7 +93,7 @@ export class ThreeStageRenderer {
     });
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.setClearColor(new Color(0x000000), 0);
-    this.draco.setDecoderPath("/assets/vendor/draco/");
+    this.draco.setDecoderPath(publicAsset("assets/vendor/draco/"));
     this.draco.setWorkerLimit(2);
     this.loader.setDRACOLoader(this.draco);
 

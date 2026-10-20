@@ -1,5 +1,6 @@
 import type { FighterId, OpenFighterId, SkinId } from "./contracts";
 import { OPEN_FIGHTER_PACKS } from "./generated/openFighterRegistry";
+import { publicAsset } from "./publicAsset";
 
 export interface FighterVisualManifest {
   fighter: FighterId;
@@ -26,8 +27,8 @@ export const FIGHTER_VISUAL_MANIFESTS = Object.fromEntries(
   OPEN_FIGHTER_PACKS.map((pack) => [pack.id, {
     fighter: pack.id,
     sourceKind: pack.kind === "3d" ? "open-3d" : "open-2d",
-    atlasRoot: `/assets/characters/open/${pack.id}`,
-    portraitRoot: `/assets/ui/fighters/${pack.id}/select`,
+    atlasRoot: publicAsset(`assets/characters/open/${pack.id}`),
+    portraitRoot: publicAsset(`assets/ui/fighters/${pack.id}/select`),
     sourceFacing: pack.visual.sourceFacing,
     availableSkins: ["00"],
     attribution: pack.visual.attribution,
