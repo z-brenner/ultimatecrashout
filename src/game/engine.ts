@@ -192,7 +192,30 @@ export interface ActiveMeleeHitbox {
   knockbackMultiplier: number;
   priority: number;
   kind: "sweet" | "normal" | "sour";
+  angle?: number;
+  baseKnockback?: number;
+  knockbackGrowth?: number;
 }
+
+/** Frames of landing lag when an aerial lands inside an auto-cancel window. */
+export const AUTO_CANCEL_LANDING_FRAMES = 4;
+
+/** True when `frame` (0 = first move frame) falls inside an authored window. */
+export const moveFrameWindowActive = (
+  window: Readonly<{ start: number; end: number }> | undefined,
+  frame: number,
+): boolean => Boolean(window && frame >= window.start && frame <= window.end);
+
+/** Whether an aerial landing at `frame` falls inside its auto-cancel window. */
+export const aerialAutoCancelled = (
+  attack: Pick<AttackDefinition, "autoCancel">,
+  frame: number,
+): boolean => {
+  const window = attack.autoCancel;
+  if (!window) return false;
+  return (window.before !== undefined && frame < window.before) ||
+    (window.after !== undefined && frame >= window.after);
+};
 
 const activeAuthoredHitboxes = (
   hitboxes: readonly AttackHitboxDefinition[],
@@ -214,6 +237,9 @@ const activeAuthoredHitboxes = (
     knockbackMultiplier: hitbox.knockbackMultiplier ?? 1,
     priority: hitbox.priority ?? 1,
     kind: hitbox.kind ?? "normal",
+    ...(hitbox.angle === undefined ? {} : { angle: hitbox.angle }),
+    ...(hitbox.baseKnockback === undefined ? {} : { baseKnockback: hitbox.baseKnockback }),
+    ...(hitbox.knockbackGrowth === undefined ? {} : { knockbackGrowth: hitbox.knockbackGrowth }),
   }];
 });
 
@@ -430,6 +456,10 @@ export interface FighterSnapshot {
   shield: number;
   maxShield: number;
   invulnerableFrames: number;
+  /** Cannot be hit or grabbed this frame (timed invulnerability or an intangible move window). */
+  intangible: boolean;
+  /** Inside a super-armor move window this frame. */
+  armored: boolean;
   currentMove: MoveName | null;
   moveFrame: number;
   specialPhase: "startup" | "active" | "recovery" | "landing" | null;
@@ -523,6 +553,8 @@ export interface GameEvent {
   entityId?: number;
   lCancelled?: boolean;
   wavedash?: boolean;
+  /** The hit landed on super armor: damage applied, no flinch or launch. */
+  armored?: boolean;
   techKind?: "neutral" | "roll-left" | "roll-right" | "wall-left" | "wall-right" | "ceiling";
   winner?: PlayerSlot;
   sound?: string;
@@ -974,7 +1006,7 @@ const sdiRegionForDirection = (direction: Vec2): number | null => {
 };
 
 export const landingLagFramesForAttack = (attack: AttackDefinition): number =>
-  clamp(Math.round(attack.recovery * 0.42), 6, 16);
+  attack.landingLag ?? clamp(Math.round(attack.recovery * 0.42), 6, 16);
 
 const withoutEdges = (input: InputFrame): InputFrame => ({
   held: input.held,
@@ -2697,12 +2729,13 @@ export class CombatGame {
           fighter.landingLagFrames = WAVEDASH_LANDING_LAG_FRAMES;
           fighter.state = "crouch";
         } else if (landingAction && AERIAL_NORMALS.has(landingAction.name)) {
-          const baseLandingLag = landingLagFramesForAttack(
-            fighter.definition.attacks[landingAction.name],
-          );
-          fighter.landingLagFrames = lCancelled
-            ? Math.floor(baseLandingLag / 2)
-            : baseLandingLag;
+          const landingAttack = fighter.definition.attacks[landingAction.name];
+          const baseLandingLag = landingLagFramesForAttack(landingAttack);
+          fighter.landingLagFrames = aerialAutoCancelled(landingAttack, landingAction.frame)
+            ? Math.min(baseLandingLag, AUTO_CANCEL_LANDING_FRAMES)
+            : lCancelled
+              ? Math.floor(baseLandingLag / 2)
+              : baseLandingLag;
           fighter.action = null;
           fighter.state = "crouch";
         }
@@ -3124,7 +3157,7 @@ export class CombatGame {
       horizontal > -8 &&
       horizontal < 86 &&
       vertical < (fighter.definition.size.height + target.definition.size.height) * 0.46 &&
-      target.invulnerableFrames === 0 &&
+      !this.isIntangible(target) &&
       target.state !== "ko" &&
       target.state !== "grabbed" &&
       target.state !== "ledge";
@@ -3404,6 +3437,24 @@ export class CombatGame {
     return result;
   }
 
+  /** Timed invulnerability (respawn, dodges, ledge) or an authored intangible move window. */
+  private isIntangible(fighter: FighterRuntime): boolean {
+    if (fighter.invulnerableFrames > 0) return true;
+    const action = fighter.action;
+    return Boolean(action && moveFrameWindowActive(
+      fighter.definition.attacks[action.name].intangible,
+      action.frame,
+    ));
+  }
+
+  private hasSuperArmor(fighter: FighterRuntime): boolean {
+    const action = fighter.action;
+    return Boolean(action && moveFrameWindowActive(
+      fighter.definition.attacks[action.name].superArmor,
+      action.frame,
+    ));
+  }
+
   private activeWorldHitboxes(
     fighter: FighterRuntime,
     action: ActiveMove,
@@ -3535,7 +3586,7 @@ export class CombatGame {
         (lastHitFrame !== undefined && action.frame - lastHitFrame < rehitFrames) ||
         target.state === "ko" ||
         target.state === "grabbed" ||
-        target.invulnerableFrames > 0
+        this.isIntangible(target)
       ) {
         continue;
       }
@@ -3560,10 +3611,21 @@ export class CombatGame {
       const launchScale = maximumHits > 1 && !isFinisher
         ? chargeScale * 0.16
         : chargeScale * (maximumHits > 1 ? 1 : hitbox.knockbackMultiplier);
+      // A bubble may author its own launch; the move supplies the rest.
+      const launchMove = hitbox.angle === undefined &&
+          hitbox.baseKnockback === undefined &&
+          hitbox.knockbackGrowth === undefined
+        ? effectiveMove
+        : {
+            ...effectiveMove,
+            angle: hitbox.angle ?? effectiveMove.angle,
+            baseKnockback: hitbox.baseKnockback ?? effectiveMove.baseKnockback,
+            knockbackGrowth: hitbox.knockbackGrowth ?? effectiveMove.knockbackGrowth,
+          };
       this.resolveAttackHit(
         attacker,
         target,
-        effectiveMove,
+        launchMove,
         action.name,
         inputs[target.slot],
         damageScale,
@@ -3656,6 +3718,30 @@ export class CombatGame {
         sound: "shield-hit",
       });
       if (target.shield <= 0) this.breakShield(target);
+      return;
+    }
+
+    if (this.hasSuperArmor(target)) {
+      // Armor absorbs the flinch, not the damage: the move keeps going.
+      const damage = move.damage * damageScale * attacker.damageMultiplier;
+      target.percent = Math.max(0, target.percent + damage * target.defenseMultiplier);
+      attacker.hitstopFrames = Math.max(attacker.hitstopFrames, move.hitstop);
+      target.hitstopFrames = Math.max(target.hitstopFrames, move.hitstop);
+      target.lastHitBy = attacker.slot;
+      target.lastHitFrames = 600;
+      this.emit({
+        type: "hit",
+        slot: attacker.slot,
+        target: target.slot,
+        move: moveName,
+        position: cloneVec(target.position),
+        value: damage,
+        damage,
+        source,
+        armored: true,
+        velocity: this.fighterWorldVelocity(target),
+        sound: "hit-light",
+      });
       return;
     }
 
@@ -4262,7 +4348,7 @@ export class CombatGame {
       const canHit =
         target.state !== "ko" &&
         target.state !== "grabbed" &&
-        target.invulnerableFrames === 0 &&
+        !this.isIntangible(target) &&
         landedHits < maximumHits &&
         !projectile.hitTargets.has(target.slot) &&
         (!projectile.definition.manualDetonation || projectile.detonating) &&
@@ -4497,7 +4583,7 @@ export class CombatGame {
   ): void {
     const horizontal = (target.position.x - attacker.position.x) * attacker.facing;
     const vertical = Math.abs(target.position.y - attacker.position.y);
-    if (horizontal < -18 || horizontal > reach || vertical > 105 || target.invulnerableFrames > 0) return;
+    if (horizontal < -18 || horizontal > reach || vertical > 105 || this.isIntangible(target)) return;
     this.applyLaunch(target, attacker, damage, attacker.facing > 0 ? 36 : 144, baseKnockback, growth, 12, targetInput);
     this.emit({
       type: "hit",
@@ -4671,7 +4757,7 @@ export class CombatGame {
           : circleIntersectsFighter(target, item.position, item.radius);
         if (
           target.state !== "ko" &&
-          target.invulnerableFrames === 0 &&
+          !this.isIntangible(target) &&
           hitsTarget
         ) {
           const consumed = this.applyActivatedItem(item, target, inputs[target.slot]);
@@ -4995,6 +5081,8 @@ export class CombatGame {
       shield: fighter.shield,
       maxShield: fighter.definition.shieldHealth,
       invulnerableFrames: fighter.invulnerableFrames,
+      intangible: this.isIntangible(fighter),
+      armored: this.hasSuperArmor(fighter),
       currentMove: action?.name ?? null,
       moveFrame: action?.frame ?? 0,
       specialPhase: action?.specialPhase ?? null,

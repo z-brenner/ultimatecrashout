@@ -104,6 +104,15 @@ const ATTACK_FIELD_CHECKS = {
   selfDamage: [nonNegative, "a non-negative number"],
   multiHit: [positiveInteger, "a positive integer"],
   hitboxes: [Array.isArray, "an array"],
+  landingLag: [nonNegativeInteger, "a non-negative integer (frames)"],
+};
+const AERIAL_MOVES = new Set(["neutral-air", "forward-air", "back-air", "up-air", "down-air"]);
+
+const validateFrameWindow = (id, where, window) => {
+  assert(isObject(window), `${id}: ${where} must be an object with start and end`);
+  assert(nonNegativeInteger(window.start) && nonNegativeInteger(window.end),
+    `${id}: ${where}.start and end must be non-negative integers (move frames)`);
+  assert(window.end >= window.start, `${id}: ${where}.end is before start`);
 };
 const HITBOX_KINDS = new Set(["sweet", "normal", "sour"]);
 
@@ -121,6 +130,10 @@ const validateHitbox = (id, where, hitbox) => {
     assert(hitbox[key] === undefined || nonNegative(hitbox[key]), `${id}: ${where}.${key} must be a non-negative number`);
   }
   assert(hitbox.priority === undefined || finite(hitbox.priority), `${id}: ${where}.priority must be a number`);
+  assert(hitbox.angle === undefined || finite(hitbox.angle), `${id}: ${where}.angle must be a number (degrees)`);
+  for (const key of ["baseKnockback", "knockbackGrowth"]) {
+    assert(hitbox[key] === undefined || nonNegative(hitbox[key]), `${id}: ${where}.${key} must be a non-negative number`);
+  }
   assert(hitbox.kind === undefined || HITBOX_KINDS.has(hitbox.kind), `${id}: ${where}.kind must be sweet, normal, or sour`);
 };
 
@@ -139,6 +152,25 @@ const validateGameplayOverrides = (id, gameplay) => {
       }
       for (const [index, hitbox] of (override.hitboxes ?? []).entries()) {
         validateHitbox(id, `gameplay.attacks.${move}.hitboxes[${index}]`, hitbox);
+      }
+      for (const key of ["landingLag", "autoCancel"]) {
+        assert(override[key] === undefined || AERIAL_MOVES.has(move),
+          `${id}: gameplay.attacks.${move}.${key} only applies to aerials`);
+      }
+      if (override.autoCancel !== undefined) {
+        const window = override.autoCancel;
+        const where = `gameplay.attacks.${move}.autoCancel`;
+        assert(isObject(window) && (window.before !== undefined || window.after !== undefined),
+          `${id}: ${where} must set before and/or after`);
+        for (const key of ["before", "after"]) {
+          assert(window[key] === undefined || nonNegativeInteger(window[key]),
+            `${id}: ${where}.${key} must be a non-negative integer (move frames)`);
+        }
+      }
+      for (const key of ["intangible", "superArmor"]) {
+        if (override[key] !== undefined) {
+          validateFrameWindow(id, `gameplay.attacks.${move}.${key}`, override[key]);
+        }
       }
     }
   }

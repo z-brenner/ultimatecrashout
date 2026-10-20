@@ -103,6 +103,7 @@
       },
       "forward-smash": {
         "label": "Buckle — Headfirst Test",
+        "superArmor": { "start": 4, "end": 14 },
         "damage": 18,
         "startup": 15,
         "active": 4,
@@ -117,6 +118,7 @@
       },
       "up-air": {
         "label": "Buckle — Whiplash",
+        "autoCancel": { "before": 3, "after": 20 },
         "damage": 9,
         "startup": 5,
         "active": 5,
@@ -130,6 +132,8 @@
       },
       "down-air": {
         "label": "Buckle — Crash Landing",
+        "landingLag": 20,
+        "autoCancel": { "before": 3, "after": 32 },
         "damage": 13,
         "startup": 12,
         "active": 5,
@@ -139,7 +143,7 @@
         "knockbackGrowth": 0.72,
         "hitboxes": [
           { "offset": { "x": 4, "y": -48 }, "radius": 14, "kind": "sweet", "activeStart": 0, "activeEnd": 2 },
-          { "offset": { "x": 0, "y": -30 }, "radius": 13, "kind": "sour", "priority": 2, "damageMultiplier": 0.75, "knockbackMultiplier": 0.8 }
+          { "offset": { "x": 0, "y": -30 }, "radius": 13, "kind": "sour", "priority": 2, "damageMultiplier": 0.75, "knockbackMultiplier": 0.8, "angle": 45 }
         ]
       }
     },

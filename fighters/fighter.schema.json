@@ -230,7 +230,21 @@
           "type": "number",
           "description": "Higher numbers win when several bubbles touch the target (default 1)."
         },
-        "kind": { "enum": ["sweet", "normal", "sour"] }
+        "kind": { "enum": ["sweet", "normal", "sour"] },
+        "angle": {
+          "type": "number",
+          "description": "Launch angle for hits from this bubble; defaults to the move's angle."
+        },
+        "baseKnockback": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Overrides the move's base knockback for this bubble."
+        },
+        "knockbackGrowth": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Overrides the move's knockback growth for this bubble."
+        }
       }
     },
     "attackOverride": {
@@ -263,6 +277,29 @@
         "hitboxes": {
           "type": "array",
           "items": { "$ref": "#/$defs/hitbox" }
+        },
+        "landingLag": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Aerials only. Landing lag frames; an L-cancel halves it."
+        },
+        "autoCancel": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "description": "Aerials only. Landing before frame `before` or on/after frame `after` uses the short auto-cancel landing.",
+          "properties": {
+            "before": { "type": "integer", "minimum": 0 },
+            "after": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "intangible": {
+          "$ref": "#/$defs/frameWindow",
+          "description": "Move frames during which nothing can hit or grab the user."
+        },
+        "superArmor": {
+          "$ref": "#/$defs/frameWindow",
+          "description": "Move frames during which hits deal damage but do not flinch or launch the user."
         }
       }
     },
@@ -274,6 +311,16 @@
         "angle": { "type": "number" },
         "baseKnockback": { "type": "number", "minimum": 0 },
         "knockbackGrowth": { "type": "number", "minimum": 0 }
+      }
+    },
+    "frameWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "description": "Inclusive move frames; 0 is the move's first frame.",
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
       }
     }
   }

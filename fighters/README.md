@@ -177,6 +177,33 @@ Rules worth knowing:
 - Specials may also be overridden here, for example to author knockback that
   `gameplay.specials` would otherwise derive from damage.
 
+### Move timing, armor, and per-hitbox launches
+
+Every frame number below counts from the move's first frame (`0`), and every
+window is inclusive.
+
+| Field | Applies to | Effect |
+| --- | --- | --- |
+| `landingLag` | aerials | Frames of lag when the aerial lands. An L-cancel halves it. Defaults to `recovery × 0.42`, clamped to 6–16. |
+| `autoCancel: { "before": 3, "after": 30 }` | aerials | Landing before frame `before`, or on/after frame `after`, uses the 4-frame auto-cancel landing instead. Either bound may be omitted. |
+| `intangible: { "start": 0, "end": 5 }` | any move | Nothing can hit or grab the fighter during those frames. |
+| `superArmor: { "start": 4, "end": 14 }` | any move | Hits still deal damage and hitstop but do not flinch, launch, or interrupt the move. |
+| hitbox `angle`, `baseKnockback`, `knockbackGrowth` | any hitbox | Override the move's launch for hits from that bubble, e.g. a spiking sweet spot and an outward sour spot. |
+
+```json
+"down-air": {
+  "landingLag": 20,
+  "autoCancel": { "before": 3, "after": 32 },
+  "hitboxes": [
+    { "offset": { "x": 4, "y": -48 }, "radius": 14, "kind": "sweet", "activeStart": 0, "activeEnd": 2 },
+    { "offset": { "x": 0, "y": -30 }, "radius": 13, "kind": "sour", "angle": 45 }
+  ]
+}
+```
+
+In the F9 overlay the hurtbox turns blue while intangible and purple during
+super armor.
+
 `npm run fighter:build` validates every override and reports the exact field
 that is wrong; the full contract is in [fighter.schema.json](fighter.schema.json).
 Turn on the in-match hitbox overlay (see "Debugging moves" below) while tuning.
@@ -184,7 +211,8 @@ Turn on the in-match hitbox overlay (see "Debugging moves" below) while tuning.
 ## Debugging moves
 
 During any match, press **F9** to toggle the collision overlay: yellow
-capsules are hurtboxes (blue while intangible), the white square marks the
+capsules are hurtboxes (blue while intangible, purple during super armor), the
+white square marks the
 fighter origin, and active hitboxes are drawn as red (sweet), orange (normal),
 or yellow (sour) circles. Adding `?hitboxes=1` to the URL starts with the
 overlay on, and `?match=<p1-id>,<p2-id>` jumps straight into a match:

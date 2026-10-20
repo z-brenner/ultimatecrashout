@@ -126,12 +126,23 @@ describe("fighter pack CLI", () => {
         },
       };
       gameplay.throws = { back: { damage: 11, baseKnockback: 60 } };
+      (gameplay.attacks as Record<string, unknown>)["down-air"] = {
+        landingLag: 18,
+        autoCancel: { before: 3, after: 30 },
+        hitboxes: [{ offset: { x: 0, y: -40 }, radius: 12, angle: 270, baseKnockback: 30, knockbackGrowth: 0.6 }],
+      };
+      (gameplay.attacks as Record<string, unknown>)["down-special"] = {
+        intangible: { start: 0, end: 4 },
+        superArmor: { start: 5, end: 12 },
+      };
     });
 
     runCli(workspace, "build");
     const registry = readFileSync(workspace.registry, "utf8");
     expect(registry).toContain('"label": "Snap Jab"');
     expect(registry).toContain('"maxJumps": 3');
+    expect(registry).toContain('"landingLag": 18');
+    expect(registry).toContain('"superArmor"');
   });
 
   it.each([
@@ -141,6 +152,11 @@ describe("fighter pack CLI", () => {
     [{ attacks: { jab: { hitboxes: [{ offset: { x: 1, y: 0 }, radius: 4, activeStart: 3, activeEnd: 1 }] } } }, "activeEnd is before activeStart"],
     [{ throws: { sideways: { damage: 3 } } }, "unknown throw gameplay.throws.sideways"],
     [{ maxJumps: 9 }, "gameplay.maxJumps must be an integer from 1 to 6"],
+    [{ attacks: { jab: { landingLag: 8 } } }, "gameplay.attacks.jab.landingLag only applies to aerials"],
+    [{ attacks: { "neutral-air": { autoCancel: {} } } }, "neutral-air.autoCancel must set before and/or after"],
+    [{ attacks: { "down-special": { superArmor: { start: 9, end: 2 } } } }, "down-special.superArmor.end is before start"],
+    [{ attacks: { jab: { intangible: { start: -1, end: 2 } } } }, "jab.intangible.start and end must be non-negative integers"],
+    [{ attacks: { jab: { hitboxes: [{ offset: { x: 1, y: 0 }, radius: 4, baseKnockback: -5 }] } } }, "hitboxes[0].baseKnockback must be a non-negative number"],
   ])("rejects invalid gameplay overrides (%j)", (overrides, message) => {
     const workspace = createWorkspace();
     writeReadyPack(workspace, (gameplay) => Object.assign(gameplay, overrides));

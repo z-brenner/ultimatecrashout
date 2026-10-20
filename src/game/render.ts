@@ -831,9 +831,14 @@ export class GameRenderer {
       });
       const radius = profile.radius * zoom;
       const segment = Math.max(0, profile.halfHeight - profile.radius) * zoom;
-      const intangible = fighter.invulnerableFrames > 0;
-      ctx.fillStyle = intangible ? "rgba(120, 220, 255, 0.16)" : "rgba(255, 230, 80, 0.2)";
-      ctx.strokeStyle = intangible ? "rgba(120, 220, 255, 0.9)" : "rgba(255, 230, 80, 0.9)";
+      // Blue: cannot be hit. Purple: super armor. Yellow: normal hurtbox.
+      const tint = fighter.intangible
+        ? "120, 220, 255"
+        : fighter.armored
+          ? "190, 120, 255"
+          : "255, 230, 80";
+      ctx.fillStyle = `rgba(${tint}, ${fighter.intangible ? 0.16 : 0.2})`;
+      ctx.strokeStyle = `rgba(${tint}, 0.9)`;
       ctx.beginPath();
       ctx.arc(center.x, center.y - segment, radius, Math.PI, 0);
       ctx.lineTo(center.x + radius, center.y + segment);

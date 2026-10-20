@@ -190,6 +190,10 @@ export const OPEN_FIGHTER_PACKS = [
         },
         "forward-smash": {
           "label": "Buckle — Headfirst Test",
+          "superArmor": {
+            "start": 4,
+            "end": 14
+          },
           "damage": 18,
           "startup": 15,
           "active": 4,
@@ -223,6 +227,10 @@ export const OPEN_FIGHTER_PACKS = [
         },
         "up-air": {
           "label": "Buckle — Whiplash",
+          "autoCancel": {
+            "before": 3,
+            "after": 20
+          },
           "damage": 9,
           "startup": 5,
           "active": 5,
@@ -247,6 +255,11 @@ export const OPEN_FIGHTER_PACKS = [
         },
         "down-air": {
           "label": "Buckle — Crash Landing",
+          "landingLag": 20,
+          "autoCancel": {
+            "before": 3,
+            "after": 32
+          },
           "damage": 13,
           "startup": 12,
           "active": 5,
@@ -274,7 +287,8 @@ export const OPEN_FIGHTER_PACKS = [
               "kind": "sour",
               "priority": 2,
               "damageMultiplier": 0.75,
-              "knockbackMultiplier": 0.8
+              "knockbackMultiplier": 0.8,
+              "angle": 45
             }
           ]
         }
