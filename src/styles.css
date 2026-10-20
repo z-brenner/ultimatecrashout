@@ -2749,7 +2749,6 @@ button.cc-home-tile:focus-visible::after { opacity: 1; }
   pointer-events: none;
 }
 .cc-lab-overlay[hidden] { display: none !important; }
-.cc-lab-overlay--hurt { border: 3px solid #3aff70; border-radius: 999px; background: rgba(58, 255, 112, 0.12); }
 .cc-lab-overlay--collision {
   z-index: 6;
   inset: 0;

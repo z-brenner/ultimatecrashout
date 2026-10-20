@@ -245,8 +245,8 @@ data**. For attack slots the scrubber and ◀| |▶ step engine move frames inst
 of sprite frames, and each frame shows:
 
 - the sprite frame the game would display (with key frames applied);
-- the engine's own active hitboxes and the hurtbox, aligned like in a match
-  (blue while intangible, purple during super armor);
+- the engine's own active hitboxes, aligned like in a match (tick **Hurtbox**
+  too for the hurtbox: blue while intangible, purple during super armor);
 - the phase (startup / active / recovery), the strike frame, and the key frame.
 
 During any match, press **F9** to toggle the collision overlay: yellow

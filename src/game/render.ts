@@ -25,6 +25,7 @@ import {
 } from "./stages";
 import { ITEM_DEFINITIONS, ITEM_KINDS, type ItemKind } from "./items";
 import { CombatEffects, type EffectView } from "./effects";
+import { drawHitboxCircle, drawHurtboxCapsule, drawOriginMarker } from "./debugOverlay";
 import type { ThreeStageRenderer } from "./threeStageRenderer";
 
 type Vec2 = { x: number; y: number };
@@ -829,41 +830,18 @@ export class GameRenderer {
         x: fighter.position.x,
         y: fighter.position.y + profile.centerOffsetY,
       });
-      const radius = profile.radius * zoom;
-      const segment = Math.max(0, profile.halfHeight - profile.radius) * zoom;
-      // Blue: cannot be hit. Purple: super armor. Yellow: normal hurtbox.
-      const tint = fighter.intangible
-        ? "120, 220, 255"
-        : fighter.armored
-          ? "190, 120, 255"
-          : "255, 230, 80";
-      ctx.fillStyle = `rgba(${tint}, ${fighter.intangible ? 0.16 : 0.2})`;
-      ctx.strokeStyle = `rgba(${tint}, 0.9)`;
-      ctx.beginPath();
-      ctx.arc(center.x, center.y - segment, radius, Math.PI, 0);
-      ctx.lineTo(center.x + radius, center.y + segment);
-      ctx.arc(center.x, center.y + segment, radius, 0, Math.PI);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+      drawHurtboxCapsule(ctx, {
+        x: center.x,
+        y: center.y,
+        radius: profile.radius * zoom,
+        segment: Math.max(0, profile.halfHeight - profile.radius) * zoom,
+      }, fighter);
       const feet = this.worldToScreen(fighter.position);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(feet.x - 3, feet.y - 3, 6, 6);
+      drawOriginMarker(ctx, feet.x, feet.y);
     }
-    const colors: Record<DebugHitbox["kind"], string> = {
-      sweet: "255, 60, 70",
-      normal: "255, 150, 40",
-      sour: "255, 220, 90",
-    };
     for (const hitbox of hitboxes) {
       const center = this.worldToScreen(hitbox.position);
-      const color = colors[hitbox.kind];
-      ctx.fillStyle = `rgba(${color}, 0.35)`;
-      ctx.strokeStyle = `rgba(${color}, 0.95)`;
-      ctx.beginPath();
-      ctx.arc(center.x, center.y, hitbox.radius * zoom, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      drawHitboxCircle(ctx, center.x, center.y, hitbox.radius * zoom, hitbox.kind);
     }
     ctx.restore();
   }
