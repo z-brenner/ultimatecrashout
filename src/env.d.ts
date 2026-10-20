@@ -1,10 +1,12 @@
 /// <reference types="vite/client" />
 
-/** Audited open 2D runtime content injected from public assets by Vite. */
-declare const __OPEN_2D_RUNTIME_CONTENT__: unknown;
-
-/** Build-time proof that every expected atlas and portrait exists for each open 3D fighter. */
-declare const __OPEN_3D_ATLAS_COMPLETENESS__: unknown;
-
-/** Lightweight visual and publication status used by menus before combat code loads. */
-declare const __OPEN_FIGHTER_RUNTIME_STATUS__: unknown;
+/**
+ * Open fighter runtime data served by scripts/content_dev_plugin.mjs: audited
+ * 2D animation metadata, and per-fighter visual/publication status used by
+ * menus before combat code loads. Reloads in `npm run dev` when packs or
+ * atlases change.
+ */
+declare module "virtual:open-fighter-runtime" {
+  export const OPEN_2D_RUNTIME_CONTENT: unknown;
+  export const OPEN_FIGHTER_RUNTIME_STATUS: unknown;
+}

@@ -13,6 +13,7 @@ import {
 } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { holdContentBuildLock } from "./content_build_lock.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packRoot = resolve(process.env.STAGE_PACKS_ROOT ?? join(projectRoot, "stages"));
@@ -294,6 +295,8 @@ const generatedRegistry = (loaded) => {
 };
 
 const writeAtomic = async (path, content) => {
+  // Unchanged outputs are left alone so the dev server does not reload for nothing.
+  if (await readFile(path, "utf8").then((current) => current === content, () => false)) return;
   await mkdir(dirname(path), { recursive: true });
   const temporary = `${path}.tmp-${process.pid}`;
   await writeFile(temporary, content);
@@ -415,7 +418,11 @@ const refreshPackAssets = async (id) => {
 
 const build = async () => {
   const requestedId = args.find((argument) => !argument.startsWith("--"));
-  if (requestedId) await refreshPackAssets(requestedId);
+  if (requestedId) {
+    // Released on exit, after the registry below is written too.
+    holdContentBuildLock(projectRoot, `stage:build ${requestedId}`);
+    await refreshPackAssets(requestedId);
+  }
   const loaded = await loadPacks();
   await writeAtomic(registryOut, generatedRegistry(loaded));
   const ready = loaded.filter(({ pack }) => pack.status === "ready").length;

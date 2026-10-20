@@ -16,7 +16,8 @@ npm run stage:check
 ```
 
 `stage:build -- <id>` needs `cwebp` (see `npm run content:doctor`). Without an
-id, `stage:build` only re-syncs the registry. [`crash-course`](crash-course/)
+id, `stage:build` only re-syncs the registry; `npm run dev` does that by itself
+whenever a `stage.json` is saved. [`crash-course`](crash-course/)
 is a complete original reference pack; its art is drawn by
 `scripts/starter_stage/generate_crash_course.py`.
 

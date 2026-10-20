@@ -43,6 +43,8 @@ guidance. Running the game and changing TypeScript do not require Blender.
 Use the smallest relevant loop:
 
 - Engine or UI code: `npm test -- --watch` or a targeted Vitest file.
+- Fighter or stage data: keep `npm run dev` running and save the pack JSON; the
+  dev server re-syncs and reloads, and shows validation errors in the page.
 - Fighter pack: `npm run fighter:build -- <id>` then `npm run fighter:check`.
 - Stage pack: `npm run stage:build` then `npm run stage:check`.
 
