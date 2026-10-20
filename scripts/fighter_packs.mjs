@@ -107,6 +107,8 @@ const ATTACK_FIELD_CHECKS = {
   landingLag: [nonNegativeInteger, "a non-negative integer (frames)"],
 };
 const AERIAL_MOVES = new Set(["neutral-air", "forward-air", "back-air", "up-air", "down-air"]);
+/** Animation slots driven by move timing; keyFrames only applies to these. */
+const MOVE_SLOTS = new Set([...MOVE_NAMES].map((move) => move.replaceAll("-", "_")));
 
 const validateFrameWindow = (id, where, window) => {
   assert(isObject(window), `${id}: ${where} must be an object with start and end`);
@@ -234,6 +236,14 @@ const validateReadyPack = (pack, render, config) => {
   assert(validUrl(visual.sourcePage), `${id}: invalid sourcePage`);
   assert(isObject(visual.license) && nonEmpty(visual.license.id), `${id}: license is missing`);
   assert(visual.license.url === undefined || validUrl(visual.license.url), `${id}: invalid license URL`);
+  if (visual.keyFrames !== undefined) {
+    assert(isObject(visual.keyFrames), `${id}: visual.keyFrames must be an object`);
+    for (const [slot, frame] of Object.entries(visual.keyFrames)) {
+      assert(MOVE_SLOTS.has(slot),
+        `${id}: visual.keyFrames.${slot} is not an attack animation slot (${[...MOVE_SLOTS].join(", ")})`);
+      assert(nonNegativeInteger(frame), `${id}: visual.keyFrames.${slot} must be a non-negative integer (atlas frame)`);
+    }
+  }
 
   assert(isObject(effects), `${id}: effects is missing`);
   assert(isObject(effects.materials), `${id}: effects.materials is missing`);

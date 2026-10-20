@@ -227,4 +227,18 @@ describe("fighter pack CLI", () => {
     expect(render.spriteStrips).toMatchObject({ directory: "sprites", frameWidth: 128, frameHeight: 128 });
     expect(readFileSync(join(workspace.packs, "fresh-fighter/sprites/README.md"), "utf8")).toContain("idle.png");
   });
+
+  it.each([
+    [{ grab_hold: 2 }, "visual.keyFrames.grab_hold is not an attack animation slot"],
+    [{ jab: -1 }, "visual.keyFrames.jab must be a non-negative integer"],
+  ])("rejects invalid animation key frames (%j)", (keyFrames, message) => {
+    const workspace = createWorkspace();
+    const fighterDirectory = join(workspace.packs, "rgs-stick");
+    cpSync(join(projectRoot, "fighters/rgs-stick"), fighterDirectory, { recursive: true });
+    const fighterPath = join(fighterDirectory, "fighter.json");
+    const fighter = JSON.parse(readFileSync(fighterPath, "utf8"));
+    fighter.visual.keyFrames = keyFrames;
+    writeFileSync(fighterPath, JSON.stringify(fighter));
+    expect(() => runCli(workspace, "build")).toThrow(message);
+  });
 });

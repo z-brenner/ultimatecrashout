@@ -216,6 +216,26 @@ super armor.
 that is wrong; the full contract is in [fighter.schema.json](fighter.schema.json).
 Turn on the in-match hitbox overlay (see "Debugging moves" below) while tuning.
 
+## Syncing animation to hitboxes
+
+An attack's clip is normally stretched evenly over the whole move
+(startup + active + recovery), so the strike pose rarely lines up with the
+first frame its hitbox is out. Pin it with `visual.keyFrames`: for each attack
+slot, the 0-based atlas frame that should be on screen on the move's first
+active frame.
+
+```json
+"visual": {
+  "keyFrames": { "jab": 1, "forward_smash": 4, "neutral_air": 1 }
+}
+```
+
+Frames before the key frame play over the startup, the key frame lands exactly
+on the first active frame, and the rest play over the active and recovery
+frames. Keys are the 17 attack slots (`jab` … `down_special`, snake_case);
+`npm test` checks every key frame exists in that fighter's atlas. Fighters
+without key frames keep the even stretch.
+
 ## Debugging moves
 
 During any match, press **F9** to toggle the collision overlay: yellow

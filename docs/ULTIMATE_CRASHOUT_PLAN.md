@@ -57,10 +57,10 @@ Ordered by how much they constrain the goals.
 5. **New special mechanics need engine code.** Packs pick from enumerated
    projectile kinds and movement types. That keeps content non-executable
    (a deliberate safety property) but limits "unique abilities".
-6. **Animation timing is coarse.** Attack clips are stretched across
-   startup+active+recovery (fps ignored), and each frame is re-grounded on its
-   lowest opaque pixel. There are no per-frame pivots or event markers, so
-   syncing a key pose to the first active frame is trial and error.
+6. **Animation timing is still coarse outside the key pose.** `visual.keyFrames`
+   pins an attack's strike pose to its first active frame, but the rest of the
+   clip is stretched linearly, each frame is re-grounded on its lowest opaque
+   pixel, and there are no per-frame pivots or multiple event markers.
 7. ~~Root-absolute asset URLs prevented sub-path deployment.~~ Fixed: runtime
    paths go through `publicAsset()` and the build is relative by default;
    browser tests run under a sub-path and reject any request outside it.
@@ -96,8 +96,8 @@ Ordered by how much they constrain the goals.
 2. ~~Pack-authorable move timing~~ (done): `landingLag`, `autoCancel`,
    `intangible`, `superArmor`, and per-hitbox `angle`/`baseKnockback`/
    `knockbackGrowth`.
-3. Animation events: optional per-slot `keyFrame` (the atlas frame that should
-   land on the first active frame) so art and hitboxes line up by design.
+3. ~~Animation key frames~~ (done): `visual.keyFrames` pins an attack's strike
+   pose to its first active frame.
 4. Real Lab hitbox viewer: step any fighter's move frame by frame with the
    engine's own hitbox data.
 5. ~~Base-path-safe asset URLs and a GitHub Pages deploy workflow~~ (done;

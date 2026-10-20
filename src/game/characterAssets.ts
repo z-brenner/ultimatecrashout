@@ -409,6 +409,32 @@ export function animationForFighter(fighter: FighterSnapshot): CharacterAnimatio
   return "idle";
 }
 
+/**
+ * Atlas frame for a move on `moveFrame`. Without a key frame the clip is
+ * stretched evenly over the whole move. With one, frames before it fill the
+ * startup, the key frame lands exactly on the first active frame, and the rest
+ * fill the active and recovery frames, so a strike pose meets its hitbox.
+ */
+export const moveAnimationFrame = (
+  moveFrame: number,
+  move: Readonly<{ startup: number; active: number; recovery: number }>,
+  frameCount: number,
+  keyFrame?: number,
+): number => {
+  const lastFrame = Math.max(0, frameCount - 1);
+  const totalFrames = move.startup + move.active + move.recovery;
+  if (keyFrame === undefined || keyFrame < 0 || keyFrame > lastFrame) {
+    const progress = Math.min(1, moveFrame / Math.max(1, totalFrames - 1));
+    return Math.min(lastFrame, Math.floor(progress * frameCount));
+  }
+  if (moveFrame < move.startup) {
+    return Math.min(keyFrame, Math.floor((moveFrame / move.startup) * keyFrame));
+  }
+  const after = move.active + move.recovery;
+  const progress = Math.min(1, (moveFrame - move.startup) / Math.max(1, after - 1));
+  return Math.min(lastFrame, keyFrame + Math.floor(progress * (frameCount - keyFrame)));
+};
+
 const MOVE_ANIMATION_SLOT: Readonly<Record<MoveName, RemoteAnimationSlot>> = {
   jab: "jab",
   "dash-attack": "dash_attack",
@@ -933,12 +959,11 @@ export class CharacterSpriteLibrary {
     elapsedSeconds: number,
   ): number {
     if (fighter.currentMove) {
-      const move = getFighterDefinition(fighter.fighter).attacks[fighter.currentMove];
-      const totalFrames = move.startup + move.active + move.recovery;
-      const progress = Math.min(1, fighter.moveFrame / Math.max(1, totalFrames - 1));
-      return Math.min(
-        definition.frameCount - 1,
-        Math.floor(progress * definition.frameCount),
+      return moveAnimationFrame(
+        fighter.moveFrame,
+        getFighterDefinition(fighter.fighter).attacks[fighter.currentMove],
+        definition.frameCount,
+        FIGHTER_VISUAL_MANIFESTS[fighter.fighter].keyFrames[slot],
       );
     }
 

@@ -309,6 +309,24 @@ export const OPEN_FIGHTER_PACKS = [
       "license": {
         "id": "CC0-1.0",
         "url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      },
+      "keyFrames": {
+        "jab": 1,
+        "dash_attack": 1,
+        "forward_tilt": 1,
+        "up_tilt": 1,
+        "down_tilt": 1,
+        "forward_smash": 4,
+        "up_smash": 4,
+        "down_smash": 3,
+        "neutral_air": 1,
+        "forward_air": 1,
+        "back_air": 1,
+        "up_air": 1,
+        "down_air": 1,
+        "neutral_special": 2,
+        "side_special": 1,
+        "up_special": 0
       }
     },
     "effects": {

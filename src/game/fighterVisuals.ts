@@ -12,6 +12,11 @@ export interface FighterVisualManifest {
   attribution: string;
   sourcePage: string;
   license: { id: string; url?: string };
+  /**
+   * Per attack slot: the atlas frame that should be on screen on the move's
+   * first active frame (see moveAnimationFrame).
+   */
+  keyFrames: Readonly<Partial<Record<string, number>>>;
 }
 
 interface FighterRuntimeStatus {
@@ -34,6 +39,8 @@ export const FIGHTER_VISUAL_MANIFESTS = Object.fromEntries(
     attribution: pack.visual.attribution,
     sourcePage: pack.visual.sourcePage,
     license: pack.visual.license,
+    // Optional, so absent from most packs' literal types.
+    keyFrames: (pack.visual as { keyFrames?: Readonly<Record<string, number>> }).keyFrames ?? {},
   } satisfies FighterVisualManifest]),
 ) as unknown as Readonly<Record<FighterId, FighterVisualManifest>>;
 
