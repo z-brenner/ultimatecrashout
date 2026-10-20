@@ -224,7 +224,7 @@ export class CpuController {
     }
 
     if (distance < 82) {
-      if (this.random.next() < difficulty.grabChance && opponent.invulnerableFrames === 0) {
+      if (this.random.next() < difficulty.grabChance && !opponent.intangible) {
         return {
           direction: { x: toward, y: 0 },
           action: "grab",

@@ -201,6 +201,14 @@ window is inclusive.
 }
 ```
 
+Notes:
+
+- A chargeable smash holds its frame while charging, and windows do not apply
+  during the hold. Count windows on the move as if it were released at once.
+- Super armor absorbs melee hits, projectiles, and item hits. Grabs and command
+  grabs still beat it.
+- When both apply, the shorter of the auto-cancel landing and the L-cancel wins.
+
 In the F9 overlay the hurtbox turns blue while intangible and purple during
 super armor.
 

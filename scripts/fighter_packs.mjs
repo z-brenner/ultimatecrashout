@@ -113,6 +113,9 @@ const validateFrameWindow = (id, where, window) => {
   assert(nonNegativeInteger(window.start) && nonNegativeInteger(window.end),
     `${id}: ${where}.start and end must be non-negative integers (move frames)`);
   assert(window.end >= window.start, `${id}: ${where}.end is before start`);
+  for (const key of Object.keys(window)) {
+    assert(key === "start" || key === "end", `${id}: unknown field ${where}.${key}`);
+  }
 };
 const HITBOX_KINDS = new Set(["sweet", "normal", "sour"]);
 
@@ -162,10 +165,13 @@ const validateGameplayOverrides = (id, gameplay) => {
         const where = `gameplay.attacks.${move}.autoCancel`;
         assert(isObject(window) && (window.before !== undefined || window.after !== undefined),
           `${id}: ${where} must set before and/or after`);
-        for (const key of ["before", "after"]) {
-          assert(window[key] === undefined || nonNegativeInteger(window[key]),
+        for (const key of Object.keys(window)) {
+          assert(key === "before" || key === "after", `${id}: unknown field ${where}.${key}`);
+          assert(nonNegativeInteger(window[key]),
             `${id}: ${where}.${key} must be a non-negative integer (move frames)`);
         }
+        assert(window.before === undefined || window.after === undefined || window.before < window.after,
+          `${id}: ${where}.before must be lower than after (otherwise every landing auto-cancels)`);
       }
       for (const key of ["intangible", "superArmor"]) {
         if (override[key] !== undefined) {
