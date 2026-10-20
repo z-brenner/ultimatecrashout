@@ -1,3 +1,5 @@
+import { publicAsset } from "./publicAsset";
+
 export type ItemKind =
   | "vitality-fruit"
   | "med-kit"
@@ -71,7 +73,7 @@ const item = (
     duration,
     charges,
     color,
-    iconUrl: `/assets/open/items/${id}.svg`,
+    iconUrl: publicAsset(`assets/open/items/${id}.svg`),
   };
 };
 

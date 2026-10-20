@@ -1,6 +1,7 @@
 import type { FighterId, PlayerSlot } from "../game/contracts";
 import type { GamepadUiDevice, GamepadUiSnapshot } from "./gamepadUi";
 import { gamepadUiDeviceToMenuSnapshot } from "./gamepadNavigation";
+import { publicAsset } from "../game/publicAsset";
 
 interface CursorState {
   slot: PlayerSlot;
@@ -38,8 +39,8 @@ const INTERACTIVE_SELECTOR = [
 function handMarkup(slot: PlayerSlot): string {
   return `
     <span class="cc-player-cursor__hand" aria-hidden="true">
-      <img class="cc-player-cursor__pointer" src="/assets/open/ui/cursor-pointer.svg" alt="" draggable="false">
-      <img class="cc-player-cursor__grab" src="/assets/open/ui/cursor-grab.svg" alt="" draggable="false">
+      <img class="cc-player-cursor__pointer" src="${publicAsset("assets/open/ui/cursor-pointer.svg")}" alt="" draggable="false">
+      <img class="cc-player-cursor__grab" src="${publicAsset("assets/open/ui/cursor-grab.svg")}" alt="" draggable="false">
     </span>
     <span>P${slot + 1}</span>`;
 }

@@ -60,8 +60,9 @@ Ordered by how much they constrain the goals.
    startup+active+recovery (fps ignored), and each frame is re-grounded on its
    lowest opaque pixel. There are no per-frame pivots or event markers, so
    syncing a key pose to the first active frame is trial and error.
-7. **Root-absolute asset URLs** (`/assets/...` in items, audio, cursors, Draco,
-   atlases) prevent sub-path deployment such as GitHub Pages project sites.
+7. ~~Root-absolute asset URLs prevented sub-path deployment.~~ Fixed: runtime
+   paths go through `publicAsset()` and the build is relative by default;
+   browser tests run under a sub-path and reject any request outside it.
 8. **The 14 legacy prototypes cannot be rebuilt from a clone**: their sources
    live in a private, git-ignored vault; 3D also needs Blender + zsh. Running
    `scripts/open_fighter_pipeline/build_atlases.mjs` without that vault would
@@ -98,8 +99,8 @@ Ordered by how much they constrain the goals.
    land on the first active frame) so art and hitboxes line up by design.
 4. Real Lab hitbox viewer: step any fighter's move frame by frame with the
    engine's own hitbox data.
-5. Base-path-safe asset URLs (`import.meta.env.BASE_URL`) and a deploy
-   workflow for one static host.
+5. ~~Base-path-safe asset URLs~~ (done). Next: a deploy workflow for one
+   static host once GitHub Actions is enabled.
 6. Hot reload of fighter metadata in `npm run dev` (virtual module instead of
    `define`).
 7. Replace Buckle's procedural strips with hand-drawn art (same filenames, no

@@ -5,6 +5,7 @@ import {
 } from "./contracts";
 import { ITEM_DEFINITIONS, type ItemKind } from "./items";
 import { DEFAULT_STAGE_ID, STAGE_IDS } from "./stages";
+import { publicAsset } from "./publicAsset";
 
 export type MusicMode = "off" | "menu" | "combat";
 export type MusicTrackId = "menu" | StageId;
@@ -40,48 +41,48 @@ export interface SoundEffectOptions {
 export type MenuStreamStatus = "idle" | "loading" | "ready" | "failed";
 
 export const LOCAL_AUDIO_SAMPLES = {
-  bootIntro: "/assets/audio/open/sfx/boot.ogg",
-  menuMove: "/assets/audio/open/sfx/menu-move.ogg",
-  menuConfirm: "/assets/audio/open/sfx/menu-confirm.ogg",
-  menuBack: "/assets/audio/open/sfx/menu-back.ogg",
-  hitLight: "/assets/audio/open/sfx/hit-light.ogg",
-  hitMedium: "/assets/audio/open/sfx/hit-medium.ogg",
-  hitHeavy: "/assets/audio/open/sfx/hit-heavy.ogg",
-  shield: "/assets/audio/open/sfx/shield.ogg",
-  shieldBreak: "/assets/audio/open/sfx/shield-break.ogg",
-  ko: "/assets/audio/open/sfx/ko.ogg",
-  land: "/assets/audio/open/sfx/land.ogg",
-  dodge: "/assets/audio/open/sfx/dodge.ogg",
-  grab: "/assets/audio/open/sfx/grab.ogg",
-  throw: "/assets/audio/open/sfx/throw.ogg",
-  projectile: "/assets/audio/open/sfx/projectile.ogg",
-  itemPickup: "/assets/audio/open/sfx/item-pickup.ogg",
-  itemSpawn: "/assets/audio/open/sfx/item-spawn.ogg",
-  respawn: "/assets/audio/open/sfx/respawn.ogg",
-  ledge: "/assets/audio/open/sfx/ledge.ogg",
-  waterPush: "/assets/audio/open/sfx/projectile.ogg",
-  itemBomb: "/assets/audio/open/sfx/hit-heavy.ogg",
-  itemShell: "/assets/audio/open/sfx/throw.ogg",
-  itemSlip: "/assets/audio/open/sfx/dodge.ogg",
-  itemBumper: "/assets/audio/open/sfx/shield.ogg",
-  itemPitfall: "/assets/audio/open/sfx/land.ogg",
-  itemRay: "/assets/audio/open/sfx/projectile.ogg",
-  itemFire: "/assets/audio/open/sfx/projectile.ogg",
-  itemReflect: "/assets/audio/open/sfx/shield.ogg",
-  itemPower: "/assets/audio/open/sfx/menu-confirm.ogg",
-  ready: "/assets/audio/open/sfx/ready.ogg",
-  three: "/assets/audio/open/sfx/countdown.ogg",
-  two: "/assets/audio/open/sfx/countdown.ogg",
-  one: "/assets/audio/open/sfx/countdown.ogg",
-  go: "/assets/audio/open/sfx/menu-confirm.ogg",
-  gameSet: "/assets/audio/open/sfx/game-set.ogg",
+  bootIntro: publicAsset("assets/audio/open/sfx/boot.ogg"),
+  menuMove: publicAsset("assets/audio/open/sfx/menu-move.ogg"),
+  menuConfirm: publicAsset("assets/audio/open/sfx/menu-confirm.ogg"),
+  menuBack: publicAsset("assets/audio/open/sfx/menu-back.ogg"),
+  hitLight: publicAsset("assets/audio/open/sfx/hit-light.ogg"),
+  hitMedium: publicAsset("assets/audio/open/sfx/hit-medium.ogg"),
+  hitHeavy: publicAsset("assets/audio/open/sfx/hit-heavy.ogg"),
+  shield: publicAsset("assets/audio/open/sfx/shield.ogg"),
+  shieldBreak: publicAsset("assets/audio/open/sfx/shield-break.ogg"),
+  ko: publicAsset("assets/audio/open/sfx/ko.ogg"),
+  land: publicAsset("assets/audio/open/sfx/land.ogg"),
+  dodge: publicAsset("assets/audio/open/sfx/dodge.ogg"),
+  grab: publicAsset("assets/audio/open/sfx/grab.ogg"),
+  throw: publicAsset("assets/audio/open/sfx/throw.ogg"),
+  projectile: publicAsset("assets/audio/open/sfx/projectile.ogg"),
+  itemPickup: publicAsset("assets/audio/open/sfx/item-pickup.ogg"),
+  itemSpawn: publicAsset("assets/audio/open/sfx/item-spawn.ogg"),
+  respawn: publicAsset("assets/audio/open/sfx/respawn.ogg"),
+  ledge: publicAsset("assets/audio/open/sfx/ledge.ogg"),
+  waterPush: publicAsset("assets/audio/open/sfx/projectile.ogg"),
+  itemBomb: publicAsset("assets/audio/open/sfx/hit-heavy.ogg"),
+  itemShell: publicAsset("assets/audio/open/sfx/throw.ogg"),
+  itemSlip: publicAsset("assets/audio/open/sfx/dodge.ogg"),
+  itemBumper: publicAsset("assets/audio/open/sfx/shield.ogg"),
+  itemPitfall: publicAsset("assets/audio/open/sfx/land.ogg"),
+  itemRay: publicAsset("assets/audio/open/sfx/projectile.ogg"),
+  itemFire: publicAsset("assets/audio/open/sfx/projectile.ogg"),
+  itemReflect: publicAsset("assets/audio/open/sfx/shield.ogg"),
+  itemPower: publicAsset("assets/audio/open/sfx/menu-confirm.ogg"),
+  ready: publicAsset("assets/audio/open/sfx/ready.ogg"),
+  three: publicAsset("assets/audio/open/sfx/countdown.ogg"),
+  two: publicAsset("assets/audio/open/sfx/countdown.ogg"),
+  one: publicAsset("assets/audio/open/sfx/countdown.ogg"),
+  go: publicAsset("assets/audio/open/sfx/menu-confirm.ogg"),
+  gameSet: publicAsset("assets/audio/open/sfx/game-set.ogg"),
 } as const;
 
 export const LOCAL_MUSIC_TRACKS: Readonly<Record<MusicTrackId, string>> = {
-  menu: "/assets/audio/open/music/menu-loop.ogg",
+  menu: publicAsset("assets/audio/open/music/menu-loop.ogg"),
   ...Object.fromEntries(STAGE_IDS.map((stage) => [
     stage,
-    "/assets/audio/open/music/battle-loop.ogg",
+    publicAsset("assets/audio/open/music/battle-loop.ogg"),
   ])),
 } as Readonly<Record<MusicTrackId, string>>;
 

@@ -9,10 +9,11 @@ if (!existsSync(resolve(source, "index.html")) || !existsSync(resolve(source, "a
   throw new Error("Missing public game build. Run npm run build:public first.");
 }
 
+// The game build uses relative URLs, so it is copied whole under /play/.
+// Older syncs placed its assets at the site root; remove that copy too.
 rmSync(resolve(target, "assets"), { recursive: true, force: true });
 rmSync(resolve(target, "play"), { recursive: true, force: true });
 mkdirSync(resolve(target, "play"), { recursive: true });
-cpSync(resolve(source, "assets"), resolve(target, "assets"), { recursive: true });
-cpSync(resolve(source, "index.html"), resolve(target, "play", "index.html"));
+cpSync(source, resolve(target, "play"), { recursive: true });
 
 console.log("Public game bundle synchronized into the hosted site.");

@@ -24,7 +24,8 @@ const sumSizes = async (paths) => {
 
 try {
   const html = await readFile(join(distRoot, "index.html"), "utf8");
-  const entryMatch = html.match(/<script[^>]+src="\/assets\/([^"]+\.js)"/);
+  // The build base may be relative ("./assets/…") or absolute ("/…/assets/…").
+  const entryMatch = html.match(/<script[^>]+src="[^"]*?assets\/([^"/]+\.js)"/);
   if (!entryMatch?.[1]) fail("JavaScript entry not found in dist/index.html");
   const entry = await readFile(join(distRoot, "assets", entryMatch[1]));
   const entryGzipBytes = gzipSync(entry, { level: 9 }).byteLength;
