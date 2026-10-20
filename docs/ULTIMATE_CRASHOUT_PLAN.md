@@ -99,8 +99,8 @@ Ordered by how much they constrain the goals.
    land on the first active frame) so art and hitboxes line up by design.
 4. Real Lab hitbox viewer: step any fighter's move frame by frame with the
    engine's own hitbox data.
-5. ~~Base-path-safe asset URLs~~ (done). Next: a deploy workflow for one
-   static host once GitHub Actions is enabled.
+5. ~~Base-path-safe asset URLs and a GitHub Pages deploy workflow~~ (done;
+   Pages source must be set to "GitHub Actions").
 6. Hot reload of fighter metadata in `npm run dev` (virtual module instead of
    `define`).
 7. Replace Buckle's procedural strips with hand-drawn art (same filenames, no

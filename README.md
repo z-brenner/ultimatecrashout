@@ -85,6 +85,11 @@ with an explicit prefix instead:
 UC_BASE_PATH=/games/crashout/ npm run build
 ```
 
+Pushes to `main` deploy automatically through
+`.github/workflows/pages.yml` once **Settings → Pages → Source** is set to
+**GitHub Actions** (the "Deploy from a branch" option would publish the
+unbuilt source instead).
+
 The browser tests (`npm run test:e2e`) serve the build under
 `/ultimatecrashout/` and fail on any request outside that path; set
 `E2E_BASE_PATH=/` to test the domain-root case.
