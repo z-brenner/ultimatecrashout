@@ -12,11 +12,12 @@ export function readOpenFighterRuntime(root: string): {
 export function classifyContentChange(
   root: string,
   file: string,
-): { kind: "sync"; packs: "fighters" | "stages" } | { kind: "reload" } | null;
+): { kind: "sync"; packs: "fighters" | "stages" } | { kind: "reload" } | { kind: "lock" } | null;
 export function openFighterRuntimePlugin(options: { root: string }): Plugin;
 export function contentWatchPlugin(options: {
   root: string;
   runSync?: (root: string, script: string) => Promise<{ ok: boolean; output: string }>;
   debounceMs?: number;
   reloadQuietMs?: number;
+  lockPollMs?: number;
 }): Plugin;

@@ -444,7 +444,12 @@ for (const [fighterId, fighter] of Object.entries(manifest.fighters)) {
   console.log(`${fighterId}: ${counts.direct} direct, ${counts.adapted} adapted, ${counts.author_required} author_required`);
 }
 
-// Written last and atomically: the dev server reloads when this file changes.
-await writeFile(`${metadataPath}.tmp-${process.pid}`, `${JSON.stringify(consolidated, null, 2)}\n`);
-await rename(`${metadataPath}.tmp-${process.pid}`, metadataPath);
+// Atomic, so the dev server never reads a half-written file.
+const metadataTemporary = `${metadataPath}.tmp-${process.pid}`;
+try {
+  await writeFile(metadataTemporary, `${JSON.stringify(consolidated, null, 2)}\n`);
+  await rename(metadataTemporary, metadataPath);
+} finally {
+  await rm(metadataTemporary, { force: true });
+}
 console.log(`Open 2D atlases generated in ${publicRoot}`);

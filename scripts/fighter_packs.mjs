@@ -11,6 +11,7 @@ import {
 } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { withContentBuildLock } from "./content_build_lock.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packRoot = resolve(process.env.FIGHTER_PACKS_ROOT ?? join(projectRoot, "fighters"));
@@ -661,6 +662,10 @@ const build = async () => {
   if (!requestedId) return;
   const selected = ready.find(({ pack }) => pack.id === requestedId);
   assert(selected, `Ready fighter pack not found: ${requestedId}`);
+  await withContentBuildLock(projectRoot, `fighter:build ${requestedId}`, () => buildFighterAssets(selected, requestedId));
+};
+
+const buildFighterAssets = (selected, requestedId) => {
   if (selected.pack.kind === "3d") {
     run("zsh", ["scripts/open_fighter_pipeline/render_all.sh"], {
       env: { OPEN_FIGHTERS: requestedId },

@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { basename, join, relative, sep } from "node:path";
+import { CONTENT_BUILD_LOCK, readContentBuildLock } from "./content_build_lock.mjs";
 
 /**
  * Open fighter runtime data (2D animation metadata and per-fighter
@@ -17,28 +18,25 @@ const SYNC_SCRIPTS = {
   stages: "scripts/stage_packs.mjs",
 };
 /**
- * Files the game reads only through a full reload. Atlas builds rewrite
- * dozens of .webp files and finish with the metadata, so the metadata (not
- * each atlas) is the reload point; a half-built fighter is never served.
+ * Generated modules the plugin reloads itself (instead of Vite's own update),
+ * so one change reloads the page once and also refreshes the runtime module.
  */
-const RELOAD_FILES = new Set([
-  METADATA_2D,
-  MANIFEST_3D,
+const GENERATED_MODULES = new Set([
   "src/game/generated/openFighterRegistry.ts",
   "src/game/generated/openStageRegistry.ts",
+  "src/game/openAnimationMetadata.ts",
 ]);
-const PORTRAIT = /^public\/assets\/ui\/fighters\/[^/]+\/select\/00\.png$/;
-const GENERATED_REGISTRIES = new Set([
-  "src/game/generated/openFighterRegistry.ts",
-  "src/game/generated/openStageRegistry.ts",
-]);
+const RELOAD_FILES = new Set([...GENERATED_MODULES, METADATA_2D, MANIFEST_3D]);
+/** Atlases, metadata, portraits, and thumbnails the game loads at startup. */
+const RUNTIME_ASSET = /^public\/assets\/(characters\/open|ui\/fighters)\/.+\.(webp|png|json)$/;
+/** Editor swap files and atomic-write temporaries never trigger anything. */
+const SCRATCH_FILE = /(\.tmp-\d+(\.\w+)?|\.swp|\.swx|~)$|^(\.DS_Store|4913)$/;
 
 const readJson = (path) => {
   try {
     return JSON.parse(readFileSync(path, "utf8"));
   } catch (error) {
-    throw new Error(`Cannot read ${path} (${error instanceof Error ? error.message : error}). ` +
-      "If a content build is running, the page reloads when it finishes.");
+    throw new Error(`Cannot read ${path}: ${error instanceof Error ? error.message : error}`);
   }
 };
 
@@ -88,11 +86,13 @@ const repositoryPath = (root, file) => {
 export const classifyContentChange = (root, file) => {
   const path = repositoryPath(root, file);
   if (!path) return null;
+  if (path === CONTENT_BUILD_LOCK) return { kind: "lock" };
+  if (SCRATCH_FILE.test(basename(path))) return null;
   // Every pack input (JSON, sprite strips, stage art, pipeline config) feeds
   // the sync's validation; the sync itself never writes inside these folders.
   const pack = path.match(/^(fighters|stages)\/.+/);
-  if (pack && !path.endsWith(".md")) return { kind: "sync", packs: pack[1] };
-  if (RELOAD_FILES.has(path) || PORTRAIT.test(path)) return { kind: "reload" };
+  if (pack) return path.endsWith(".md") ? null : { kind: "sync", packs: pack[1] };
+  if (RELOAD_FILES.has(path) || RUNTIME_ASSET.test(path)) return { kind: "reload" };
   return null;
 };
 
@@ -122,21 +122,27 @@ export const openFighterRuntimePlugin = ({ root }) => ({
 
 /**
  * Dev-server half: saving anything in a fighter or stage pack re-runs the
- * (fast) registry sync; regenerated registries, manifests, and finished atlas
- * builds reload the page once. Invalid packs show the validator's message in
- * Vite's error overlay until they are fixed, across reloads and new tabs.
+ * (fast) registry sync; regenerated registries, manifests, atlases, and
+ * thumbnails reload the page once. While `fighter:build -- <id>` or
+ * `stage:build -- <id>` holds the build lock, everything waits for the build
+ * to finish, then syncs and reloads once. Invalid packs show the validator's
+ * message in Vite's error overlay until they are fixed, across reloads.
  */
-export const contentWatchPlugin = ({ root, runSync = runNodeScript, debounceMs = 80, reloadQuietMs = 300 }) => {
+export const contentWatchPlugin = ({
+  root,
+  runSync = runNodeScript,
+  debounceMs = 80,
+  reloadQuietMs = 300,
+  lockPollMs = 1000,
+}) => {
   const enabled = () => !process.env.VITEST;
   return {
     name: "ultimate-crashout-content-watch",
     apply: "serve",
-    // The plugin owns reloads for generated registries, so one save never
-    // reloads twice (Vite's own update plus ours).
     hotUpdate({ file }) {
       if (!enabled()) return;
       const path = repositoryPath(root, file);
-      if (path && GENERATED_REGISTRIES.has(path)) return [];
+      if (path && GENERATED_MODULES.has(path)) return [];
     },
     configureServer(server) {
       if (!enabled()) return;
@@ -144,23 +150,34 @@ export const contentWatchPlugin = ({ root, runSync = runNodeScript, debounceMs =
       const queues = { fighters: newQueue(), stages: newQueue() };
       /** Latest sync error per pack type; null once that type syncs cleanly. */
       const failures = { fighters: null, stages: null };
+      /** Work deferred while a content build holds the lock. */
+      const deferred = { reload: false, sync: new Set() };
+      let building = false;
+      let lockPoll;
 
-      const sendFailures = () => {
+      const failurePayload = () => {
         const messages = Object.entries(failures)
           .filter(([, message]) => message !== null)
           .map(([packs, message]) => `${packs} pack sync failed:\n${message}`);
-        if (messages.length === 0) return false;
-        server.ws.send({
+        return messages.length === 0 ? null : {
           type: "error",
           err: { message: messages.join("\n\n"), stack: "", plugin: "ultimate-crashout-content-watch" },
-        });
-        return true;
+        };
       };
 
       let reloadTimer;
       const scheduleReload = () => {
+        if (building) {
+          deferred.reload = true;
+          return;
+        }
         clearTimeout(reloadTimer);
         reloadTimer = setTimeout(() => {
+          // A build may have started since this reload was armed.
+          if (building) {
+            deferred.reload = true;
+            return;
+          }
           for (const environment of Object.values(server.environments ?? {})) {
             const module = environment.moduleGraph?.getModuleById(RESOLVED_RUNTIME_MODULE);
             if (module) environment.moduleGraph.invalidateModule(module);
@@ -191,11 +208,15 @@ export const contentWatchPlugin = ({ root, runSync = runNodeScript, debounceMs =
           // A changed registry reloads the page through the watcher. A fix
           // that restores the previous registry changes no file, so reload
           // here to clear the overlay (debounced into the same reload).
-          if (wasFailing && !sendFailures()) scheduleReload();
+          if (wasFailing) {
+            const remaining = failurePayload();
+            if (remaining) server.ws.send(remaining);
+            else scheduleReload();
+          }
         } else {
           failures[packs] = result.output;
           logger.error(`[content] ${packs} sync failed:\n${result.output}`, { timestamp: true });
-          sendFailures();
+          server.ws.send(failurePayload());
         }
         if (queue.pending) {
           queue.pending = false;
@@ -204,21 +225,52 @@ export const contentWatchPlugin = ({ root, runSync = runNodeScript, debounceMs =
       };
 
       const schedule = (packs) => {
+        if (building) {
+          deferred.sync.add(packs);
+          return;
+        }
         const queue = queues[packs];
         clearTimeout(queue.timer);
-        queue.timer = setTimeout(() => void sync(packs), debounceMs);
+        queue.timer = setTimeout(() => {
+          if (building) deferred.sync.add(packs);
+          else void sync(packs);
+        }, debounceMs);
       };
 
-      // A reload reconnects every tab: show a still-invalid pack again.
-      server.ws.on("connection", () => {
-        sendFailures();
+      /** Re-reads the lock; on release, runs the deferred work once. */
+      const checkLock = () => {
+        const lock = readContentBuildLock(root);
+        if (lock && !building) {
+          building = true;
+          logger.info(`[content] waiting for ${lock.label ?? "content build"}`, { timestamp: true });
+          // A killed build leaves its lock behind; notice when its process is gone.
+          lockPoll = setInterval(checkLock, lockPollMs);
+        } else if (!lock && building) {
+          building = false;
+          clearInterval(lockPoll);
+          const packs = [...deferred.sync];
+          const reload = deferred.reload;
+          deferred.sync.clear();
+          deferred.reload = false;
+          for (const type of packs) schedule(type);
+          if (reload) scheduleReload();
+        }
+      };
+
+      // A reload reconnects the tab: show a still-invalid pack again, to that tab only.
+      server.ws.on("connection", (socket) => {
+        const payload = failurePayload();
+        if (payload) socket.send(JSON.stringify(payload));
       });
       server.watcher.on("all", (event, file) => {
         if (event !== "add" && event !== "change" && event !== "unlink") return;
         const change = classifyContentChange(root, file);
-        if (change?.kind === "sync") schedule(change.packs);
+        if (change?.kind === "lock") checkLock();
+        else if (change?.kind === "sync") schedule(change.packs);
         else if (change?.kind === "reload") scheduleReload();
       });
+      server.httpServer?.once("close", () => clearInterval(lockPoll));
+      checkLock();
     },
   };
 };

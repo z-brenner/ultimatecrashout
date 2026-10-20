@@ -27,6 +27,9 @@ assets-source/
 # Keep any non-public experiment in the generic local vaults above. The public
 # runtime never discovers or loads those directories.
 
+# Held by fighter:build/stage:build while they run (see scripts/content_build_lock.mjs).
+.content-build.lock
+
 # Playwright output
 test-results/
 playwright-report/

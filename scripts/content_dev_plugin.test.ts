@@ -1,4 +1,7 @@
+import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +12,7 @@ import {
   openFighterRuntimePlugin,
   readOpenFighterRuntime,
 } from "./content_dev_plugin.mjs";
+import { CONTENT_BUILD_LOCK, readContentBuildLock, withContentBuildLock } from "./content_build_lock.mjs";
 import { OPEN_2D_FIGHTER_IDS, OPEN_3D_FIGHTER_IDS } from "../src/game/generated/openFighterRegistry";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -48,9 +52,16 @@ describe("content change classification", () => {
     ["scripts/open_fighter_pipeline/manifest.json", { kind: "reload" }],
     ["src/game/generated/openFighterRegistry.ts", { kind: "reload" }],
     ["src/game/generated/openStageRegistry.ts", { kind: "reload" }],
+    ["src/game/openAnimationMetadata.ts", { kind: "reload" }],
     ["public/assets/ui/fighters/buckle/select/00.png", { kind: "reload" }],
-    // Mid-build atlas churn waits for the metadata written at the end.
-    ["public/assets/characters/open/buckle/00/jab.webp", null],
+    ["public/assets/ui/fighters/buckle/select/00.thumb.webp", { kind: "reload" }],
+    ["public/assets/characters/open/buckle/00/jab.webp", { kind: "reload" }],
+    [".content-build.lock", { kind: "lock" }],
+    ["public/assets/characters/open/2d-animation-metadata.json.tmp-123", null],
+    ["stages/crash-course/assets/preview.thumb.webp.tmp-77.webp", null],
+    ["fighters/buckle/.fighter.json.swp", null],
+    ["fighters/buckle/4913", null],
+    ["fighters/.DS_Store", null],
     ["fighters/README.md", null],
     ["stages/crash-course/PROVENANCE.md", null],
     ["src/game/engine.ts", null],
@@ -75,7 +86,10 @@ describe("content watch plugin", () => {
     process.env.VITEST = savedVitest;
   });
 
-  const startServer = (runSync: (root: string, script: string) => Promise<SyncResult>) => {
+  const startServer = (
+    runSync: (root: string, script: string) => Promise<SyncResult>,
+    serverRoot = root,
+  ) => {
     delete process.env.VITEST;
     const watcher = new EventEmitter();
     const ws = Object.assign(new EventEmitter(), { send: vi.fn() });
@@ -90,9 +104,15 @@ describe("content watch plugin", () => {
       watcher,
       ws,
     };
-    const plugin = contentWatchPlugin({ root, runSync, debounceMs: 1, reloadQuietMs: 5 }) as unknown as WatchPlugin;
+    const plugin = contentWatchPlugin({
+      root: serverRoot,
+      runSync,
+      debounceMs: 1,
+      reloadQuietMs: 5,
+      lockPollMs: 5,
+    }) as unknown as WatchPlugin;
     plugin.configureServer(server);
-    const emit = (event: string, path: string) => watcher.emit("all", event, join(root, path));
+    const emit = (event: string, path: string) => watcher.emit("all", event, join(serverRoot, path));
     const sent = () => ws.send.mock.calls.map(([payload]) => payload as { type: string; err?: { message: string } });
     return { plugin, ws, moduleGraph, emit, sent };
   };
@@ -122,15 +142,50 @@ describe("content watch plugin", () => {
     expect(moduleGraph.invalidateModule).toHaveBeenCalledTimes(1);
   });
 
-  it("waits for the end of an atlas build before reloading", async () => {
-    const { emit, sent } = startServer(vi.fn());
-    emit("unlink", "public/assets/characters/open/buckle/00/jab.webp");
-    emit("add", "public/assets/characters/open/buckle/00/jab.webp");
-    await settle();
-    expect(sent()).toEqual([]);
-    emit("change", "public/assets/characters/open/2d-animation-metadata.json");
-    await settle();
-    expect(sent()).toEqual([{ type: "full-reload" }]);
+  it("waits for a locked content build, then syncs and reloads once", async () => {
+    const buildRoot = mkdtempSync(join(tmpdir(), "uc-content-lock-"));
+    try {
+      const runSync = vi.fn(async () => ({ ok: true, output: "" }));
+      const { emit, sent } = startServer(runSync, buildRoot);
+      writeFileSync(join(buildRoot, CONTENT_BUILD_LOCK), JSON.stringify({ pid: process.pid, label: "fighter:build buckle" }));
+      emit("add", CONTENT_BUILD_LOCK);
+      emit("unlink", "public/assets/characters/open/buckle/00/jab.webp");
+      emit("add", "public/assets/characters/open/buckle/00/jab.webp");
+      emit("change", "public/assets/characters/open/2d-animation-metadata.json");
+      emit("add", "public/assets/ui/fighters/buckle/select/00.thumb.webp");
+      emit("change", "stages/crash-course/assets/preview.thumb.webp");
+      await settle();
+      expect(sent()).toEqual([]);
+      expect(runSync).not.toHaveBeenCalled();
+
+      rmSync(join(buildRoot, CONTENT_BUILD_LOCK));
+      emit("unlink", CONTENT_BUILD_LOCK);
+      await settle();
+      expect(runSync).toHaveBeenCalledTimes(1);
+      expect(runSync).toHaveBeenCalledWith(buildRoot, "scripts/stage_packs.mjs");
+      expect(sent()).toEqual([{ type: "full-reload" }]);
+    } finally {
+      rmSync(buildRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("recovers from a lock left behind by a killed build", async () => {
+    const buildRoot = mkdtempSync(join(tmpdir(), "uc-content-lock-"));
+    try {
+      const { emit, sent } = startServer(vi.fn(), buildRoot);
+      writeFileSync(join(buildRoot, CONTENT_BUILD_LOCK), JSON.stringify({ pid: process.pid, label: "x" }));
+      emit("add", CONTENT_BUILD_LOCK);
+      emit("change", "public/assets/characters/open/2d-animation-metadata.json");
+      await settle();
+      expect(sent()).toEqual([]);
+      // The owner dies without removing the lock: the poll releases it.
+      const dead = spawnSync(process.execPath, ["-e", ""]).pid;
+      writeFileSync(join(buildRoot, CONTENT_BUILD_LOCK), JSON.stringify({ pid: dead, label: "x" }));
+      await settle();
+      expect(sent()).toEqual([{ type: "full-reload" }]);
+    } finally {
+      rmSync(buildRoot, { recursive: true, force: true });
+    }
   });
 
   it("keeps each pack type's error until that type is fixed", async () => {
@@ -152,18 +207,20 @@ describe("content watch plugin", () => {
     await settle();
     expect(sent().filter(({ type }) => type === "full-reload")).toEqual([]);
 
-    // A reloaded or newly opened tab sees the error again.
+    // A reloaded or newly opened tab (and only that tab) sees the error again.
     ws.send.mockClear();
-    ws.emit("connection");
-    expect(sent().at(-1)?.err?.message).toContain("jab.startup");
+    const socket = { send: vi.fn() };
+    ws.emit("connection", socket);
+    expect(ws.send).not.toHaveBeenCalled();
+    expect(JSON.parse(socket.send.mock.calls[0]![0] as string).err.message).toContain("jab.startup");
 
     // Fixing the fighter clears the overlay, even if the registry is unchanged.
     emit("change", "fighters/buckle/fighter.json");
     await settle();
     expect(sent().at(-1)).toEqual({ type: "full-reload" });
-    ws.send.mockClear();
-    ws.emit("connection");
-    expect(ws.send).not.toHaveBeenCalled();
+    const laterSocket = { send: vi.fn() };
+    ws.emit("connection", laterSocket);
+    expect(laterSocket.send).not.toHaveBeenCalled();
   });
 
   it("re-runs a sync requested while one is in flight", async () => {
@@ -202,5 +259,23 @@ describe("content watch plugin", () => {
     plugin.configureServer({ config: { logger: {} }, watcher, ws: { send: vi.fn(), on: vi.fn() } });
     expect(watcher.on).not.toHaveBeenCalled();
     expect(plugin.hotUpdate({ file: join(root, "src/game/generated/openFighterRegistry.ts") })).toBeUndefined();
+  });
+});
+
+describe("content build lock", () => {
+  it("is held for the build and released even when it fails", async () => {
+    const buildRoot = mkdtempSync(join(tmpdir(), "uc-content-lock-"));
+    try {
+      await withContentBuildLock(buildRoot, "stage:build demo", () => {
+        expect(readContentBuildLock(buildRoot)).toMatchObject({ pid: process.pid, label: "stage:build demo" });
+      });
+      expect(existsSync(join(buildRoot, CONTENT_BUILD_LOCK))).toBe(false);
+      await expect(withContentBuildLock(buildRoot, "x", () => {
+        throw new Error("cwebp failed");
+      })).rejects.toThrow("cwebp failed");
+      expect(readContentBuildLock(buildRoot)).toBeNull();
+    } finally {
+      rmSync(buildRoot, { recursive: true, force: true });
+    }
   });
 });

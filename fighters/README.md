@@ -122,8 +122,9 @@ While `npm run dev` is running, gameplay data needs no manual rebuild: saving
 `fighter.json` (or anything else in the pack) re-validates and re-syncs the
 registry and reloads the page. Art changes in a 2D `render.json` or in
 `sprites/` take effect when `npm run fighter:build -- <id>` rebuilds the
-atlases; run it in another terminal and the page reloads once the build
-finishes, with no server restart. An invalid pack shows the validator's
+atlases; run it in another terminal and the dev server waits for the whole
+build (atlases, thumbnails, checksums), then reloads once, with no server
+restart. An invalid pack shows the validator's
 message, with the exact field, in the browser's error overlay until it is
 fixed.
 
