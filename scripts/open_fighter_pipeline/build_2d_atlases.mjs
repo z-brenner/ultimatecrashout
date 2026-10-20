@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -444,5 +444,7 @@ for (const [fighterId, fighter] of Object.entries(manifest.fighters)) {
   console.log(`${fighterId}: ${counts.direct} direct, ${counts.adapted} adapted, ${counts.author_required} author_required`);
 }
 
-await writeFile(metadataPath, `${JSON.stringify(consolidated, null, 2)}\n`);
+// Written last and atomically: the dev server reloads when this file changes.
+await writeFile(`${metadataPath}.tmp-${process.pid}`, `${JSON.stringify(consolidated, null, 2)}\n`);
+await rename(`${metadataPath}.tmp-${process.pid}`, metadataPath);
 console.log(`Open 2D atlases generated in ${publicRoot}`);

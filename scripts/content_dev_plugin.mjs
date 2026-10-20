@@ -12,14 +12,35 @@ const RESOLVED_RUNTIME_MODULE = `\0${OPEN_FIGHTER_RUNTIME_MODULE}`;
 
 const METADATA_2D = "public/assets/characters/open/2d-animation-metadata.json";
 const MANIFEST_3D = "scripts/open_fighter_pipeline/manifest.json";
-const RUNTIME_INPUT_ROOTS = ["public/assets/characters/open/", "public/assets/ui/fighters/"];
 const SYNC_SCRIPTS = {
   fighters: "scripts/fighter_packs.mjs",
   stages: "scripts/stage_packs.mjs",
 };
-const PACK_FILE = /^(fighters|stages)\/[^/]+\/(fighter|render|stage)\.json$/;
+/**
+ * Files the game reads only through a full reload. Atlas builds rewrite
+ * dozens of .webp files and finish with the metadata, so the metadata (not
+ * each atlas) is the reload point; a half-built fighter is never served.
+ */
+const RELOAD_FILES = new Set([
+  METADATA_2D,
+  MANIFEST_3D,
+  "src/game/generated/openFighterRegistry.ts",
+  "src/game/generated/openStageRegistry.ts",
+]);
+const PORTRAIT = /^public\/assets\/ui\/fighters\/[^/]+\/select\/00\.png$/;
+const GENERATED_REGISTRIES = new Set([
+  "src/game/generated/openFighterRegistry.ts",
+  "src/game/generated/openStageRegistry.ts",
+]);
 
-const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
+const readJson = (path) => {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    throw new Error(`Cannot read ${path} (${error instanceof Error ? error.message : error}). ` +
+      "If a content build is running, the page reloads when it finishes.");
+  }
+};
 
 export const readOpenFighterRuntime = (root) => {
   const open2DAssetsRoot = join(root, "public/assets/characters/open");
@@ -67,17 +88,15 @@ const repositoryPath = (root, file) => {
 export const classifyContentChange = (root, file) => {
   const path = repositoryPath(root, file);
   if (!path) return null;
-  const pack = path.match(PACK_FILE);
-  if (pack) return { kind: "sync", packs: pack[1] };
-  if (
-    path === METADATA_2D ||
-    path === MANIFEST_3D ||
-    (RUNTIME_INPUT_ROOTS.some((prefix) => path.startsWith(prefix)) && /\.(webp|png)$/.test(path))
-  ) {
-    return { kind: "runtime" };
-  }
+  // Every pack input (JSON, sprite strips, stage art, pipeline config) feeds
+  // the sync's validation; the sync itself never writes inside these folders.
+  const pack = path.match(/^(fighters|stages)\/.+/);
+  if (pack && !path.endsWith(".md")) return { kind: "sync", packs: pack[1] };
+  if (RELOAD_FILES.has(path) || PORTRAIT.test(path)) return { kind: "reload" };
   return null;
 };
+
+const newQueue = () => ({ running: false, pending: false, timer: undefined });
 
 const runNodeScript = (root, script) =>
   new Promise((resolve) => {
@@ -102,73 +121,104 @@ export const openFighterRuntimePlugin = ({ root }) => ({
 });
 
 /**
- * Dev-server half: saving a fighter or stage pack re-runs the (fast) registry
- * sync, and new atlases or metadata reload the runtime module. Invalid packs
- * show the validator's message in Vite's error overlay.
+ * Dev-server half: saving anything in a fighter or stage pack re-runs the
+ * (fast) registry sync; regenerated registries, manifests, and finished atlas
+ * builds reload the page once. Invalid packs show the validator's message in
+ * Vite's error overlay until they are fixed, across reloads and new tabs.
  */
-export const contentWatchPlugin = ({ root, runSync = runNodeScript, debounceMs = 80 }) => ({
-  name: "ultimate-crashout-content-watch",
-  apply: "serve",
-  configureServer(server) {
-    if (process.env.VITEST) return;
-    const logger = server.config.logger;
-    const queues = {};
-    let failed = false;
+export const contentWatchPlugin = ({ root, runSync = runNodeScript, debounceMs = 80, reloadQuietMs = 300 }) => {
+  const enabled = () => !process.env.VITEST;
+  return {
+    name: "ultimate-crashout-content-watch",
+    apply: "serve",
+    // The plugin owns reloads for generated registries, so one save never
+    // reloads twice (Vite's own update plus ours).
+    hotUpdate({ file }) {
+      if (!enabled()) return;
+      const path = repositoryPath(root, file);
+      if (path && GENERATED_REGISTRIES.has(path)) return [];
+    },
+    configureServer(server) {
+      if (!enabled()) return;
+      const logger = server.config.logger;
+      const queues = { fighters: newQueue(), stages: newQueue() };
+      /** Latest sync error per pack type; null once that type syncs cleanly. */
+      const failures = { fighters: null, stages: null };
 
-    let reloadTimer;
-    const reloadRuntime = () => {
-      clearTimeout(reloadTimer);
-      reloadTimer = setTimeout(invalidateRuntime, debounceMs);
-    };
-    const invalidateRuntime = () => {
-      for (const environment of Object.values(server.environments ?? {})) {
-        const module = environment.moduleGraph?.getModuleById(RESOLVED_RUNTIME_MODULE);
-        if (module) environment.moduleGraph.invalidateModule(module);
-      }
-      server.ws.send({ type: "full-reload" });
-    };
-
-    const sync = async (packs) => {
-      const queue = (queues[packs] ??= { running: false, pending: false, timer: undefined });
-      if (queue.running) {
-        queue.pending = true;
-        return;
-      }
-      queue.running = true;
-      const result = await runSync(root, SYNC_SCRIPTS[packs]);
-      queue.running = false;
-      if (result.ok) {
-        logger.info(`[content] ${result.output || `${packs} synchronized`}`, { timestamp: true });
-        // The rewritten registry reloads the page on its own; after a failure
-        // the registry may be unchanged, so clear the error overlay here.
-        if (failed) server.ws.send({ type: "full-reload" });
-        failed = false;
-      } else {
-        failed = true;
-        logger.error(`[content] ${packs} sync failed:\n${result.output}`, { timestamp: true });
+      const sendFailures = () => {
+        const messages = Object.entries(failures)
+          .filter(([, message]) => message !== null)
+          .map(([packs, message]) => `${packs} pack sync failed:\n${message}`);
+        if (messages.length === 0) return false;
         server.ws.send({
           type: "error",
-          err: { message: `${packs} pack sync failed:\n${result.output}`, stack: "", plugin: "ultimate-crashout-content-watch" },
+          err: { message: messages.join("\n\n"), stack: "", plugin: "ultimate-crashout-content-watch" },
         });
-      }
-      if (queue.pending) {
-        queue.pending = false;
-        await sync(packs);
-      }
-    };
+        return true;
+      };
 
-    const schedule = (packs) => {
-      const queue = (queues[packs] ??= { running: false, pending: false, timer: undefined });
-      clearTimeout(queue.timer);
-      queue.timer = setTimeout(() => void sync(packs), debounceMs);
-    };
+      let reloadTimer;
+      const scheduleReload = () => {
+        clearTimeout(reloadTimer);
+        reloadTimer = setTimeout(() => {
+          for (const environment of Object.values(server.environments ?? {})) {
+            const module = environment.moduleGraph?.getModuleById(RESOLVED_RUNTIME_MODULE);
+            if (module) environment.moduleGraph.invalidateModule(module);
+          }
+          server.ws.send({ type: "full-reload" });
+        }, reloadQuietMs);
+      };
 
-    server.watcher.add([join(root, "fighters"), join(root, "stages")]);
-    server.watcher.on("all", (event, file) => {
-      if (event !== "add" && event !== "change" && event !== "unlink") return;
-      const change = classifyContentChange(root, file);
-      if (change?.kind === "sync") schedule(change.packs);
-      else if (change?.kind === "runtime") reloadRuntime();
-    });
-  },
-});
+      const sync = async (packs) => {
+        const queue = queues[packs];
+        if (queue.running) {
+          queue.pending = true;
+          return;
+        }
+        queue.running = true;
+        let result;
+        try {
+          result = await runSync(root, SYNC_SCRIPTS[packs]);
+        } catch (error) {
+          result = { ok: false, output: error instanceof Error ? error.message : String(error) };
+        } finally {
+          queue.running = false;
+        }
+        const wasFailing = failures[packs] !== null;
+        if (result.ok) {
+          failures[packs] = null;
+          logger.info(`[content] ${result.output || `${packs} synchronized`}`, { timestamp: true });
+          // A changed registry reloads the page through the watcher. A fix
+          // that restores the previous registry changes no file, so reload
+          // here to clear the overlay (debounced into the same reload).
+          if (wasFailing && !sendFailures()) scheduleReload();
+        } else {
+          failures[packs] = result.output;
+          logger.error(`[content] ${packs} sync failed:\n${result.output}`, { timestamp: true });
+          sendFailures();
+        }
+        if (queue.pending) {
+          queue.pending = false;
+          await sync(packs);
+        }
+      };
+
+      const schedule = (packs) => {
+        const queue = queues[packs];
+        clearTimeout(queue.timer);
+        queue.timer = setTimeout(() => void sync(packs), debounceMs);
+      };
+
+      // A reload reconnects every tab: show a still-invalid pack again.
+      server.ws.on("connection", () => {
+        sendFailures();
+      });
+      server.watcher.on("all", (event, file) => {
+        if (event !== "add" && event !== "change" && event !== "unlink") return;
+        const change = classifyContentChange(root, file);
+        if (change?.kind === "sync") schedule(change.packs);
+        else if (change?.kind === "reload") scheduleReload();
+      });
+    },
+  };
+};

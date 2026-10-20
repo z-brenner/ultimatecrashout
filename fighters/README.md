@@ -118,12 +118,14 @@ regenerates:
 Do not edit these three outputs manually. They are also synchronized by
 `npm run dev`, `npm test`, and `npm run build`.
 
-While `npm run dev` is running you do not need to rebuild by hand for data
-changes. Saving a `fighter.json` or `render.json` re-syncs the registry and
-reloads the page. Rebuilt atlases (`npm run fighter:build -- <id>` in another
-terminal) are picked up the same way, with no server restart. An invalid pack
-shows the validator's message, with the exact field, in the browser's error
-overlay; the next valid save clears it.
+While `npm run dev` is running, gameplay data needs no manual rebuild: saving
+`fighter.json` (or anything else in the pack) re-validates and re-syncs the
+registry and reloads the page. Art changes in a 2D `render.json` or in
+`sprites/` take effect when `npm run fighter:build -- <id>` rebuilds the
+atlases; run it in another terminal and the page reloads once the build
+finishes, with no server restart. An invalid pack shows the validator's
+message, with the exact field, in the browser's error overlay until it is
+fixed.
 
 The targeted `npm run fighter:build -- <id>` command automatically regenerates
 the fighter thumbnail. After manually replacing multiple fighter portraits or
