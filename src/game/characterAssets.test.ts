@@ -4,6 +4,7 @@ import type { FighterSnapshot } from "./engine";
 import { getFighterDefinition } from "./roster";
 import {
   CHARACTER_ATLAS_REVISION,
+  firstHitFrame,
   moveAnimationFrame,
   CHARACTER_PORTRAITS,
   CharacterSpriteLibrary,
@@ -360,6 +361,23 @@ describe("move animation key frames", () => {
     }
   });
 
+  it("waits for authored hitboxes that come out after the first active frame", () => {
+    const delayed = {
+      ...move,
+      hitboxes: [
+        { offset: { x: 0, y: 0 }, radius: 10, activeStart: 3 },
+        { offset: { x: 0, y: 0 }, radius: 10, activeStart: 2 },
+      ],
+    };
+    expect(firstHitFrame(move)).toBe(move.startup);
+    expect(firstHitFrame(delayed)).toBe(move.startup + 2);
+    expect(moveAnimationFrame(move.startup + 2, delayed, 8, 4)).toBe(4);
+    expect(moveAnimationFrame(move.startup + 1, delayed, 8, 4)).toBeLessThan(4);
+    // An activeStart past the active window clamps to its last frame.
+    expect(firstHitFrame({ ...move, hitboxes: [{ offset: { x: 0, y: 0 }, radius: 10, activeStart: 99 }] }))
+      .toBe(move.startup + move.active - 1);
+  });
+
   it("ignores a key frame outside the clip instead of freezing", () => {
     expect(moveAnimationFrame(10, move, 8, 12)).toBe(moveAnimationFrame(10, move, 8));
   });
@@ -376,4 +394,3 @@ describe("move animation key frames", () => {
     expect(Object.keys(FIGHTER_VISUAL_MANIFESTS.buckle.keyFrames)).toContain("forward_smash");
   });
 });
-

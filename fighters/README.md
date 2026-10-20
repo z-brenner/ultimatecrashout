@@ -230,11 +230,12 @@ active frame.
 }
 ```
 
-Frames before the key frame play over the startup, the key frame lands exactly
-on the first active frame, and the rest play over the active and recovery
-frames. Keys are the 17 attack slots (`jab` … `down_special`, snake_case);
-`npm test` checks every key frame exists in that fighter's atlas. Fighters
-without key frames keep the even stretch.
+Frames before the key frame play over the wind-up, the key frame lands exactly
+on the first frame a hitbox is out (the first active frame, or later when every
+authored hitbox has an `activeStart`), and the rest play over the remaining
+frames. Keys are the 17 attack slots (`jab` … `down_special`, snake_case).
+`npm run fighter:check` rejects a key frame past the end of its atlas.
+Fighters without key frames keep the even stretch.
 
 ## Debugging moves
 

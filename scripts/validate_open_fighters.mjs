@@ -70,6 +70,17 @@ for (const [kind, fighters, metadata] of [
     if (!sameValues(slots, metadataSlots)) {
       issues.push(`${fighter}: ${metadataSlots.length}/${slots.length} slots declared`);
     }
+    // Key frames must point at a real frame of the generated atlas; at
+    // runtime an out-of-range key frame silently falls back to the even stretch.
+    const pack = await readJson(join(root, "fighters", fighter, "fighter.json"));
+    for (const [slot, keyFrame] of Object.entries(pack.visual?.keyFrames ?? {})) {
+      const frameCount = fighterMetadata[slot]?.frameCount;
+      if (!Number.isInteger(frameCount)) {
+        issues.push(`${fighter}: visual.keyFrames.${slot} has no generated atlas metadata`);
+      } else if (keyFrame >= frameCount) {
+        issues.push(`${fighter}: visual.keyFrames.${slot} is ${keyFrame}, but the ${slot} atlas has ${frameCount} frames (0-${frameCount - 1})`);
+      }
+    }
 
     const directory = join(publicRoot, fighter, "00");
     let atlasNames = [];
