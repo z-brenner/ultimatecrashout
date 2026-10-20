@@ -1,17 +1,21 @@
 import type { OpenFighterId } from "./contracts";
 import {
+  applyAttackOverrides,
+  applyThrowOverrides,
   buildStandardAttacks,
   meleeGravity,
   meleeHorizontalAcceleration,
   meleeHorizontalSpeed,
   meleeVerticalSpeed,
   standardThrows,
+  type AttackOverrides,
   type FighterMoveProfile,
+  type ThrowOverrides,
 } from "./fighterBuilders";
 import { OPEN_FIGHTER_PACKS } from "./generated/openFighterRegistry";
 import type { FighterDefinition } from "./roster";
 
-interface OpenFighterSeed {
+export interface OpenFighterSeed {
   id: OpenFighterId;
   displayName: string;
   archetype: string;
@@ -35,9 +39,17 @@ interface OpenFighterSeed {
   speed?: number;
   reach?: number;
   specials: FighterMoveProfile["specials"];
+  /** Optional authored data for any of the 17 moves, layered over the generated kit. */
+  attacks?: AttackOverrides;
+  throws?: ThrowOverrides;
+  maxJumps?: number;
+  shieldHealth?: number;
+  shieldRegen?: number;
+  traction?: number;
+  airAcceleration?: number;
 }
 
-const createOpenFighter = (seed: OpenFighterSeed): FighterDefinition => ({
+export const createOpenFighter = (seed: OpenFighterSeed): FighterDefinition => ({
   id: seed.id,
   displayName: seed.displayName,
   archetype: seed.archetype,
@@ -54,8 +66,10 @@ const createOpenFighter = (seed: OpenFighterSeed): FighterDefinition => ({
     3_300,
     Math.round(3_300 * Math.max(0.82, seed.run / 1.6)),
   ),
-  airAcceleration: meleeHorizontalAcceleration(Math.max(0.035, seed.air * 0.05)),
-  traction: meleeHorizontalAcceleration(seed.weight >= 115 ? 0.075 : 0.065),
+  airAcceleration: meleeHorizontalAcceleration(
+    seed.airAcceleration ?? Math.max(0.035, seed.air * 0.05),
+  ),
+  traction: meleeHorizontalAcceleration(seed.traction ?? (seed.weight >= 115 ? 0.075 : 0.065)),
   wavedashTraction: meleeHorizontalAcceleration(seed.weight >= 115 ? 0.075 : 0.065),
   gravity: meleeGravity(seed.gravity),
   maxFallSpeed: meleeVerticalSpeed(seed.fall),
@@ -64,17 +78,17 @@ const createOpenFighter = (seed: OpenFighterSeed): FighterDefinition => ({
   doubleJumpSpeed: meleeVerticalSpeed(seed.doubleJump),
   jumpSquatFrames: seed.jumpSquat,
   shortHopSpeedMultiplier: seed.shortHop,
-  maxJumps: 2,
-  shieldHealth: Math.round(54 + Math.min(20, seed.weight / 7)),
-  shieldRegen: Math.max(5.2, 8.2 - seed.weight / 55),
-  attacks: buildStandardAttacks({
+  maxJumps: seed.maxJumps ?? 2,
+  shieldHealth: seed.shieldHealth ?? Math.round(54 + Math.min(20, seed.weight / 7)),
+  shieldRegen: seed.shieldRegen ?? Math.max(5.2, 8.2 - seed.weight / 55),
+  attacks: applyAttackOverrides(buildStandardAttacks({
     fighterName: seed.displayName,
     power: seed.power,
     speed: seed.speed,
     reach: seed.reach,
     specials: seed.specials,
-  }),
-  throws: standardThrows(seed.power ?? 1),
+  }), seed.attacks),
+  throws: applyThrowOverrides(standardThrows(seed.power ?? 1), seed.throws),
 });
 
 const seeds = OPEN_FIGHTER_PACKS.map(({ id, identity, gameplay }) => ({

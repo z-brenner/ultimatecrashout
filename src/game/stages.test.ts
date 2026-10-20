@@ -42,10 +42,10 @@ describe("open stage inventory", () => {
   it.each(OPEN_STAGE_IDS)("contains a complete distributable definition for %s", (id) => {
     const stage = STAGE_DEFINITIONS[id];
     expect(stage.id).toBe(id);
-    expect(stage.previewUrl).toContain("stages/verdant-grove/assets/preview.png");
-    expect(stage.thumbnailUrl).toContain("stages/verdant-grove/assets/preview.thumb.webp");
-    expect(stage.renderUrl).toContain("stages/verdant-grove/assets/arena.webp");
-    expect(stage.backdropUrl).toContain("stages/verdant-grove/assets/backdrop.webp");
+    expect(stage.previewUrl).toContain(`stages/${id}/assets/preview.png`);
+    expect(stage.thumbnailUrl).toContain(`stages/${id}/assets/preview.thumb.webp`);
+    expect(stage.renderUrl).toContain(`stages/${id}/assets/arena.webp`);
+    expect(stage.backdropUrl).toContain(`stages/${id}/assets/backdrop.webp`);
     expect(stage.scene).toBeUndefined();
     expect(stage.license).toMatchObject({ id: "CC0-1.0" });
     expect(stage.license.sourcePage).toMatch(/^https:\/\//);

@@ -1,4 +1,4 @@
-# Contributing to Super Bash Folds
+# Contributing to Ultimate Crashout
 
 Thank you for helping build an original, open platform fighter. Contributions
 can be code, art, animation, stages, fighter design, testing, documentation, or
@@ -12,24 +12,24 @@ their provenance files. You must have the right to contribute every file.
 
 1. Read the [Code of Conduct](CODE_OF_CONDUCT.md) and
    [asset policy](ASSET_POLICY.md).
-2. Search existing [issues](https://github.com/Swarek/Super_Bash_Folds/issues)
-   and [discussions](https://github.com/Swarek/Super_Bash_Folds/discussions).
+2. Search existing [issues](https://github.com/z-brenner/ultimatecrashout/issues)
+   and [discussions](https://github.com/z-brenner/ultimatecrashout/discussions).
 3. Comment on an issue before beginning substantial work, or open a Discussion
    when the design is still uncertain.
 4. Keep the first pull request small enough to review and verify independently.
 
 Good starting points are labelled
-[`good first issue`](https://github.com/Swarek/Super_Bash_Folds/issues?q=is%3Aissue+state%3Aopen+label%3A%22good+first+issue%22)
+[`good first issue`](https://github.com/z-brenner/ultimatecrashout/issues?q=is%3Aissue+state%3Aopen+label%3A%22good+first+issue%22)
 or
-[`help wanted`](https://github.com/Swarek/Super_Bash_Folds/issues?q=is%3Aissue+state%3Aopen+label%3A%22help+wanted%22).
+[`help wanted`](https://github.com/z-brenner/ultimatecrashout/issues?q=is%3Aissue+state%3Aopen+label%3A%22help+wanted%22).
 
 ## Setup
 
 Install Node.js 20.19+ or 22.12+, then:
 
 ```sh
-git clone https://github.com/Swarek/Super_Bash_Folds.git
-cd Super_Bash_Folds
+git clone https://github.com/z-brenner/ultimatecrashout.git
+cd ultimatecrashout
 npm ci
 npm run content:doctor
 npm run dev

@@ -1,16 +1,14 @@
 import {
   OPEN_2D_FIGHTER_IDS,
   OPEN_3D_FIGHTER_IDS,
+  OPEN_FIGHTER_IDS_BY_ORDER,
 } from "./generated/openFighterRegistry";
 import { OPEN_STAGE_IDS } from "./generated/openStageRegistry";
 
 export { OPEN_2D_FIGHTER_IDS, OPEN_3D_FIGHTER_IDS, OPEN_STAGE_IDS };
 
-/** All distributable fighters, regardless of their source rendering pipeline. */
-export const OPEN_FIGHTER_IDS = [
-  ...OPEN_3D_FIGHTER_IDS,
-  ...OPEN_2D_FIGHTER_IDS,
-] as const;
+/** All distributable fighters in pack `order`, regardless of rendering pipeline. */
+export const OPEN_FIGHTER_IDS = OPEN_FIGHTER_IDS_BY_ORDER;
 
 /** Runtime roster order used by gameplay and content-driven UI surfaces. */
 export const FIGHTER_IDS = OPEN_FIGHTER_IDS;

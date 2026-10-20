@@ -1,0 +1,26 @@
+{
+  "displayName": "Buckle",
+  "author": "Ultimate Crashout contributors",
+  "sourcePage": "https://github.com/z-brenner/ultimatecrashout",
+  "license": "CC0-1.0",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "defaultFps": 12,
+  "preferredScale": 1,
+  "spriteStrips": {
+    "directory": "sprites",
+    "frameWidth": 160,
+    "frameHeight": 160,
+    "fps": {
+      "idle": 8,
+      "walk": 10,
+      "run": 14,
+      "dash": 14,
+      "fall": 8,
+      "taunt": 10,
+      "victory": 10,
+      "ledge": 8,
+      "grab_hold": 8,
+      "item_hold": 8
+    }
+  }
+}

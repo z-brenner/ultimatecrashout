@@ -79,7 +79,7 @@ const publicRuntimeBoundary: Connect.NextHandleFunction = (request, response, ne
 
 export default defineConfig(({ command }) => ({
   plugins: [{
-    name: "super-bash-folds-public-asset-boundary",
+    name: "ultimate-crashout-public-asset-boundary",
     enforce: "pre",
     configureServer(server) {
       server.middlewares.use(publicRuntimeBoundary);
@@ -116,6 +116,7 @@ export default defineConfig(({ command }) => ({
       "**/dist/**",
       "**/.local-private/**",
       "website/**",
+      "e2e/**",
     ],
   },
 }));

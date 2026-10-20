@@ -9,6 +9,25 @@ export const OPEN_3D_FIGHTER_IDS = [
   "quaternius-hero"
 ] as const;
 export const OPEN_2D_FIGHTER_IDS = [
+  "buckle",
+  "rgs-stick",
+  "dark-knight-2d",
+  "knight-hero",
+  "kenney-toon",
+  "rgs-character-prototype",
+  "hormelz-melee",
+  "hormelz-knight"
+] as const;
+/** Every ready fighter in pack `order`, regardless of render pipeline. */
+export const OPEN_FIGHTER_IDS_BY_ORDER = [
+  "buckle",
+  "kaykit-knight",
+  "george",
+  "platformer",
+  "wolf",
+  "cactus",
+  "yeti",
+  "quaternius-hero",
   "rgs-stick",
   "dark-knight-2d",
   "knight-hero",
@@ -18,6 +37,279 @@ export const OPEN_2D_FIGHTER_IDS = [
   "hormelz-knight"
 ] as const;
 export const OPEN_FIGHTER_PACKS = [
+  {
+    "$schema": "../fighter.schema.json",
+    "schemaVersion": 1,
+    "status": "ready",
+    "id": "buckle",
+    "kind": "2d",
+    "order": 5,
+    "identity": {
+      "displayName": "Buckle",
+      "archetype": "Crash-Test Brawler",
+      "playstyle": "Rocket rushdown, a meteor stomp, and an impact counter",
+      "colors": {
+        "primary": "#f6c41a",
+        "secondary": "#16161c",
+        "accent": "#ff543c"
+      }
+    },
+    "gameplay": {
+      "size": {
+        "width": 56,
+        "height": 88
+      },
+      "spriteReferenceHeight": 124,
+      "weight": 108,
+      "dash": 1.8,
+      "dashFrames": 9,
+      "run": 1.62,
+      "air": 0.98,
+      "gravity": 0.1,
+      "fall": 2.2,
+      "fastFall": 3,
+      "jump": 2.6,
+      "doubleJump": 2.3,
+      "jumpSquat": 4,
+      "shortHop": 0.62,
+      "specials": {
+        "neutral-special": {
+          "label": "Airbag Pop",
+          "damage": 8,
+          "projectile": {
+            "kind": "capsule",
+            "speed": 470,
+            "gravity": 560,
+            "launchVelocityY": 260,
+            "lifetimeFrames": 80,
+            "radius": 15,
+            "bounces": 1,
+            "absorbable": true
+          }
+        },
+        "side-special": {
+          "label": "Rocket Sled",
+          "damage": 12,
+          "specialMovement": {
+            "kind": "ground-steered",
+            "speed": 600
+          },
+          "radius": 50
+        },
+        "up-special": {
+          "label": "Ejector Seat",
+          "damage": 8,
+          "specialMovement": {
+            "kind": "steered-rise",
+            "riseSpeed": 700,
+            "horizontalSpeed": 240,
+            "steerFrames": 22
+          },
+          "radius": 46
+        },
+        "down-special": {
+          "label": "Impact Brace",
+          "damage": 13,
+          "startup": 5,
+          "active": 16,
+          "counters": true,
+          "radius": 54
+        }
+      },
+      "attacks": {
+        "jab": {
+          "label": "Buckle — Seatbelt Jab",
+          "damage": 3.5,
+          "startup": 2,
+          "active": 2,
+          "recovery": 8,
+          "angle": 40,
+          "baseKnockback": 22,
+          "knockbackGrowth": 0.4,
+          "hitboxes": [
+            {
+              "offset": {
+                "x": 24,
+                "y": 10
+              },
+              "radius": 11,
+              "kind": "normal",
+              "priority": 2
+            },
+            {
+              "offset": {
+                "x": 40,
+                "y": 10
+              },
+              "radius": 10,
+              "kind": "sweet"
+            }
+          ]
+        },
+        "forward-tilt": {
+          "label": "Buckle — Crumple Kick",
+          "damage": 10,
+          "startup": 7,
+          "active": 4,
+          "recovery": 17,
+          "angle": 36,
+          "baseKnockback": 40,
+          "knockbackGrowth": 0.8,
+          "hitboxes": [
+            {
+              "offset": {
+                "x": 18,
+                "y": -8
+              },
+              "radius": 12,
+              "kind": "sour",
+              "priority": 3,
+              "damageMultiplier": 0.85,
+              "knockbackMultiplier": 0.85
+            },
+            {
+              "offset": {
+                "x": 36,
+                "y": -6
+              },
+              "radius": 12,
+              "kind": "normal",
+              "priority": 2
+            },
+            {
+              "offset": {
+                "x": 54,
+                "y": -4
+              },
+              "radius": 11,
+              "kind": "sweet",
+              "damageMultiplier": 1.1,
+              "knockbackMultiplier": 1.08
+            }
+          ]
+        },
+        "forward-smash": {
+          "label": "Buckle — Headfirst Test",
+          "damage": 18,
+          "startup": 15,
+          "active": 4,
+          "recovery": 30,
+          "angle": 38,
+          "baseKnockback": 62,
+          "knockbackGrowth": 1.1,
+          "hitboxes": [
+            {
+              "offset": {
+                "x": 18,
+                "y": 14
+              },
+              "radius": 14,
+              "kind": "sour",
+              "priority": 2,
+              "damageMultiplier": 0.85,
+              "knockbackMultiplier": 0.85
+            },
+            {
+              "offset": {
+                "x": 38,
+                "y": 20
+              },
+              "radius": 16,
+              "kind": "sweet",
+              "damageMultiplier": 1.1,
+              "knockbackMultiplier": 1.08
+            }
+          ]
+        },
+        "up-air": {
+          "label": "Buckle — Whiplash",
+          "damage": 9,
+          "startup": 5,
+          "active": 5,
+          "recovery": 16,
+          "angle": 85,
+          "baseKnockback": 38,
+          "knockbackGrowth": 0.78,
+          "hitboxes": [
+            {
+              "offset": {
+                "x": 22,
+                "y": 30
+              },
+              "endOffset": {
+                "x": -16,
+                "y": 44
+              },
+              "radius": 15,
+              "kind": "normal"
+            }
+          ]
+        },
+        "down-air": {
+          "label": "Buckle — Crash Landing",
+          "damage": 13,
+          "startup": 12,
+          "active": 5,
+          "recovery": 22,
+          "angle": 270,
+          "baseKnockback": 30,
+          "knockbackGrowth": 0.72,
+          "hitboxes": [
+            {
+              "offset": {
+                "x": 4,
+                "y": -48
+              },
+              "radius": 14,
+              "kind": "sweet",
+              "activeStart": 0,
+              "activeEnd": 2
+            },
+            {
+              "offset": {
+                "x": 0,
+                "y": -30
+              },
+              "radius": 13,
+              "kind": "sour",
+              "priority": 2,
+              "damageMultiplier": 0.75,
+              "knockbackMultiplier": 0.8
+            }
+          ]
+        }
+      },
+      "throws": {
+        "back": {
+          "damage": 10,
+          "angle": 140,
+          "baseKnockback": 58,
+          "knockbackGrowth": 0.86
+        }
+      }
+    },
+    "visual": {
+      "sourceFacing": "right",
+      "attribution": "Buckle — original Ultimate Crashout starter fighter (procedural, scripts/starter_fighter)",
+      "sourcePage": "https://github.com/z-brenner/ultimatecrashout",
+      "license": {
+        "id": "CC0-1.0",
+        "url": "https://creativecommons.org/publicdomain/zero/1.0/"
+      }
+    },
+    "effects": {
+      "materials": {
+        "forward-smash": "heavy",
+        "down-air": "heavy",
+        "neutral-special": "energy",
+        "side-special": "fire",
+        "up-special": "wind"
+      },
+      "traits": [
+        "heavy"
+      ]
+    }
+  },
   {
     "$schema": "../fighter.schema.json",
     "schemaVersion": 1,

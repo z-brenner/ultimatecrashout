@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for helping improve Super Bash Folds. Do not attach proprietary assets, credentials, or personal data.
+        Thank you for helping improve Ultimate Crashout. Do not attach proprietary assets, credentials, or personal data.
   - type: dropdown
     id: area
     attributes:

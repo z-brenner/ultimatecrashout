@@ -30,3 +30,7 @@ assets-source/
 
 # Keep any non-public experiment in the generic local vaults above. The public
 # runtime never discovers or loads those directories.
+
+# Playwright output
+test-results/
+playwright-report/

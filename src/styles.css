@@ -3797,6 +3797,28 @@ button.cc-home-tile:focus-visible::after { opacity: 1; }
   min-height: 0;
 }
 
+.cc-random-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(5, 8, 16, 0.6);
+  font: 800 0.68rem/1 var(--cc-utility);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.cc-random-pick span { font-size: 0.95rem; }
+.cc-random-pick:hover:not(:disabled),
+.cc-random-pick:focus-visible { border-color: #fff; background: rgba(255, 255, 255, 0.16); }
+.cc-random-pick:focus-visible { outline: 3px solid #ffd326; outline-offset: 2px; }
+.cc-random-pick:disabled { opacity: 0.4; cursor: default; }
+
 .cc-player-ready {
   position: relative;
   z-index: 1;
@@ -4584,7 +4606,7 @@ button.cc-home-tile:focus-visible::after { opacity: 1; }
   right: 0;
   left: 0;
   height: clamp(46px, 7vh, 72px);
-  content: "Super Bash Folds  •  3-stock battle";
+  content: "Ultimate Crashout  •  battle results";
   padding: 12px 5vw;
   color: #fff;
   background: linear-gradient(100deg, rgba(206, 22, 31, 0.92), rgba(126, 8, 18, 0.7) 60%, transparent);
@@ -5335,7 +5357,7 @@ button.cc-home-tile:focus-visible::after { opacity: 1; }
   .cc-ui-host .is-cursor-p2 { transition: none !important; }
 }
 
-/* Super Bash Folds identity: folded platforms, cool sky light and coral motion. */
+/* Ultimate Crashout identity (inherited from the original fold motif): folded platforms, cool sky light and coral motion. */
 :root {
   --cc-ink: #071522;
   --cc-night: #10283a;
@@ -5402,7 +5424,7 @@ button.cc-home-tile:focus-visible::after { opacity: 1; }
 
 .cc-boot__wordmark em,
 .cc-title-screen__logo em {
-  margin: 0 0 -0.2em -0.08em;
+  margin: 0 0 -0.2em 0.22em;
   padding: 0.18em 0.3em 0.13em;
   color: #071522;
   background: #73e0d1;
@@ -5441,7 +5463,7 @@ button.cc-home-tile:focus-visible::after { opacity: 1; }
 }
 
 .cc-home-masthead__brand em {
-  margin-left: -0.08em;
+  margin-left: 0.28em;
   color: #071522;
   background: #73e0d1;
   box-shadow: 4px 4px 0 #ff7657;

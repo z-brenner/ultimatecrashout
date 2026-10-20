@@ -19,7 +19,7 @@ export interface FighterSkinDefinition {
 export const SKIN_IDS = ["00", "01", "02", "03"] as const satisfies readonly SkinId[];
 
 const labels: Record<SkinId, string> = {
-  "00": "Classique",
+  "00": "Classic",
   "01": "Alternative 1",
   "02": "Alternative 2",
   "03": "Alternative 3",

@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   copyFileSync,
   cpSync,
@@ -102,5 +102,27 @@ describe("stage pack CLI", () => {
     writeFileSync(stagePath, `${JSON.stringify(stage, null, 2)}\n`);
 
     expect(() => runCli(workspace, "check")).toThrow(/Outdated registry/);
+  });
+
+  const hasCwebp = spawnSync("cwebp", ["-version"], { stdio: "ignore" }).status === 0;
+
+  it.skipIf(!hasCwebp)("derives the thumbnail and checksums for one pack on build", () => {
+    const workspace = createWorkspace();
+    const directory = join(workspace.packs, "verdant-grove");
+    rmSync(join(directory, "assets/preview.thumb.webp"));
+    writeFileSync(join(directory, "SHA256SUMS"), "");
+
+    expect(runCli(workspace, "build", "verdant-grove")).toContain(
+      "verdant-grove: thumbnail and SHA256SUMS regenerated (4 files)",
+    );
+    const sums = readFileSync(join(directory, "SHA256SUMS"), "utf8").trim().split("\n");
+    expect(sums.map((line) => line.split("  ")[1])).toEqual([
+      "assets/arena.webp",
+      "assets/backdrop.webp",
+      "assets/preview.png",
+      "assets/preview.thumb.webp",
+    ]);
+    // The regenerated pack passes the full validator.
+    expect(runCli(workspace, "check")).toContain("1 stage pack(s) valid");
   });
 });

@@ -7,14 +7,17 @@
 
 ## Verdict
 
-The public runtime contains **14 open CC0 prototypes**. They are enabled in the
+The public runtime contains **14 open CC0 prototypes** plus **Buckle**, an
+original procedurally drawn starter fighter with all 50 slots authored
+directly. They are enabled in the
 character select screen, have a portrait, and each include exactly 50 WebP
 atlases compatible with the game's contract. An optional local overlay can
 extend the roster during development, but it is disabled by
 `PUBLIC_CONTENT_ONLY=1` and is not included in the repository.
 
-Every pixel and pose in these atlases comes from audited upstream clips or
-sprites. The pipeline neither draws nor interpolates motion. However, the
+Every pixel and pose in the 14 prototype atlases comes from audited upstream
+clips or sprites. The pipeline neither draws nor interpolates motion; Buckle's
+poses are drawn by its own reproducible generator. However, the
 presence of an atlas does not necessarily mean that a dedicated animation
 exists for that role: a genuine upstream clip may serve as a fallback for
 several attacks until the correct animation is produced.
@@ -26,7 +29,7 @@ The game therefore distinguishes between two states:
 - `productionReady`: all 50 roles each have a directly corresponding upstream
   clip, with no adaptation or fallback.
 
-All 14 fighters are `visualReady`. None is `productionReady` yet. The interface
+All 15 fighters are `visualReady`. Only Buckle is `productionReady`. The interface
 labels them with the **Open prototype** badge so that fallback animations are
 not presented as final animations.
 
@@ -39,6 +42,7 @@ genuine clip but does not match the role closely enough.
 
 | Fighter | Pipeline | Source | direct | adapted | author_required |
 | --- | --- | --- | ---: | ---: | ---: |
+| Buckle (original) | 2D | [Procedural, this repository](scripts/starter_fighter/) | 50 | 0 | 0 |
 | KayKit Knight | 3D | [KayKit Adventurers](https://kaylousberg.itch.io/kaykit-adventurers) + [Character Animations](https://kaylousberg.itch.io/kaykit-character-animations) | 28 | 21 | 1 |
 | Quaternius Ranger | 3D | [Fantasy Outfits](https://quaternius.com/packs/modularcharacteroutfitsfantasy.html) + [Animation Library 1](https://quaternius.com/packs/universalanimationlibrary.html) + [Library 2](https://quaternius.com/packs/universalanimationlibrary2.html) | 25 | 15 | 10 |
 | George | 3D | [Animated Mech](https://quaternius.com/packs/animatedmech.html) | 11 | 20 | 19 |

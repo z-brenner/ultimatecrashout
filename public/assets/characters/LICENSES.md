@@ -8,7 +8,7 @@ fighter directory contains:
 - the rendered WebP animation atlases used by the game.
 
 The canonical human-readable inventory is maintained in
-[`OPEN_ROSTER.md`](https://github.com/Swarek/Super_Bash_Folds/blob/main/OPEN_ROSTER.md),
+[`OPEN_ROSTER.md`](https://github.com/z-brenner/ultimatecrashout/blob/main/OPEN_ROSTER.md),
 while the machine-readable source of truth is the matching
 `fighters/<id>/fighter.json` pack.
 

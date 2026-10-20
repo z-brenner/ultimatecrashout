@@ -12,7 +12,9 @@ import type {
 import type { MenuGamepadSnapshot } from "../ui/gamepadNavigation";
 import { createPersistentBrowserStorage } from "./persistentStorage";
 
-export const GAMEPAD_STORAGE_KEY = "super-bash-folds.gamepads.v1";
+export const GAMEPAD_STORAGE_KEY = "ultimate-crashout.gamepads.v1";
+/** Pre-rebrand key; read once so existing controller assignments survive. */
+export const LEGACY_GAMEPAD_STORAGE_KEY = "super-bash-folds.gamepads.v1";
 export const DEFAULT_GAMEPAD_DEADZONE = 0.18;
 
 const BUTTON_PRESS_THRESHOLD = 0.5;
@@ -272,7 +274,8 @@ function sanitizePersisted(value: unknown): PersistedGamepads {
 function loadPersisted(storage: GamepadStorageLike | null): PersistedGamepads {
   if (!storage) return sanitizePersisted(undefined);
   try {
-    const serialized = storage.getItem(GAMEPAD_STORAGE_KEY);
+    const serialized = storage.getItem(GAMEPAD_STORAGE_KEY) ??
+      storage.getItem(LEGACY_GAMEPAD_STORAGE_KEY);
     return serialized ? sanitizePersisted(JSON.parse(serialized) as unknown) : sanitizePersisted(undefined);
   } catch {
     return sanitizePersisted(undefined);

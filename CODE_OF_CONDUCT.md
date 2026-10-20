@@ -2,7 +2,7 @@
 
 ## Our commitment
 
-We want Super Bash Folds to be a welcoming project for players, artists,
+We want Ultimate Crashout to be a welcoming project for players, artists,
 animators, designers, developers, and first-time open-source contributors.
 Participation must remain respectful, constructive, and safe regardless of
 experience, background, identity, or ability.

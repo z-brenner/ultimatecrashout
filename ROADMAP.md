@@ -38,4 +38,4 @@ Issues own implementation details and acceptance criteria.
 - A marketplace or monetized asset store.
 
 Suggest or discuss roadmap changes in
-[GitHub Discussions](https://github.com/Swarek/Super_Bash_Folds/discussions).
+[GitHub Discussions](https://github.com/z-brenner/ultimatecrashout/discussions).

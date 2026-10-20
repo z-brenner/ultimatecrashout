@@ -3166,6 +3166,458 @@
         "coverage": "direct",
         "productionReady": true
       }
+    },
+    "buckle": {
+      "idle": {
+        "frameCount": 6,
+        "fps": 8,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "idle",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "crouch": {
+        "frameCount": 4,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "crouch",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "walk": {
+        "frameCount": 8,
+        "fps": 10,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "walk",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "turn": {
+        "frameCount": 3,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "turn",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "dash": {
+        "frameCount": 5,
+        "fps": 14,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "dash",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "run": {
+        "frameCount": 8,
+        "fps": 14,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "run",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "jump_squat": {
+        "frameCount": 3,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "jump_squat",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "jump": {
+        "frameCount": 4,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "jump",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "double_jump": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "double_jump",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "fall": {
+        "frameCount": 4,
+        "fps": 8,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "fall",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "fast_fall": {
+        "frameCount": 3,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "fast_fall",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "jab": {
+        "frameCount": 5,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "jab",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "dash_attack": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "dash_attack",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "forward_tilt": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "forward_tilt",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "up_tilt": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "up_tilt",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "down_tilt": {
+        "frameCount": 5,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "down_tilt",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "forward_smash": {
+        "frameCount": 8,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "forward_smash",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "up_smash": {
+        "frameCount": 8,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "up_smash",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "down_smash": {
+        "frameCount": 8,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "down_smash",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "neutral_air": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "neutral_air",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "forward_air": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "forward_air",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "back_air": {
+        "frameCount": 5,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "back_air",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "up_air": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "up_air",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "down_air": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "down_air",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "neutral_special": {
+        "frameCount": 7,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "neutral_special",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "side_special": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "side_special",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "up_special": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "up_special",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "down_special": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "down_special",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "spot_dodge": {
+        "frameCount": 5,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "spot_dodge",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "roll_forward": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "roll_forward",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "roll_back": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "roll_back",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "air_dodge": {
+        "frameCount": 5,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "air_dodge",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "shield": {
+        "frameCount": 3,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "shield",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "item_hold": {
+        "frameCount": 4,
+        "fps": 8,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "item_hold",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "item_pickup": {
+        "frameCount": 4,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "item_pickup",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "item_attack": {
+        "frameCount": 5,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "item_attack",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "grab": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "grab",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "grab_hold": {
+        "frameCount": 4,
+        "fps": 8,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "grab_hold",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "grabbed": {
+        "frameCount": 4,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "grabbed",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "forward_throw": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "forward_throw",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "back_throw": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "back_throw",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "up_throw": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "up_throw",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "down_throw": {
+        "frameCount": 6,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "down_throw",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "hurt": {
+        "frameCount": 4,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "hurt",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "knockback": {
+        "frameCount": 4,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "knockback",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "downed": {
+        "frameCount": 4,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "downed",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "ledge": {
+        "frameCount": 4,
+        "fps": 8,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "ledge",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "entrance": {
+        "frameCount": 8,
+        "fps": 12,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "entrance",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "taunt": {
+        "frameCount": 8,
+        "fps": 10,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "taunt",
+        "coverage": "direct",
+        "productionReady": true
+      },
+      "victory": {
+        "frameCount": 8,
+        "fps": 10,
+        "columns": 8,
+        "cellSize": 192,
+        "sourceAction": "victory",
+        "coverage": "direct",
+        "productionReady": true
+      }
     }
   }
 }

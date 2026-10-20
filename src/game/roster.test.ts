@@ -15,7 +15,10 @@ describe("roster", () => {
     const expected2D = OPEN_FIGHTER_PACKS.filter(({ kind }) => kind === "2d").map(({ id }) => id);
     expect(OPEN_3D_FIGHTER_IDS).toEqual(expected3D);
     expect(OPEN_2D_FIGHTER_IDS).toEqual(expected2D);
-    expect(OPEN_FIGHTER_IDS).toEqual([...expected3D, ...expected2D]);
+    expect(OPEN_FIGHTER_IDS).toEqual(OPEN_FIGHTER_PACKS.map(({ id }) => id));
+    expect([...OPEN_FIGHTER_IDS].sort()).toEqual([...expected3D, ...expected2D].sort());
+    const orders = OPEN_FIGHTER_PACKS.map(({ order }) => order);
+    expect(orders).toEqual([...orders].sort((left, right) => left - right));
     expect(FIGHTER_IDS).toEqual(OPEN_FIGHTER_IDS);
     expect(new Set(FIGHTER_IDS).size).toBe(FIGHTER_IDS.length);
   });

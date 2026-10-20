@@ -979,3 +979,43 @@ describe("hit integration, recovery, and knockouts", () => {
     expect(snapshot.fighters[0].currentMove).toMatch(/-air$/);
   });
 });
+
+describe("authored move data", () => {
+  it("uses a pack's authored hitbox chain for live collisions", () => {
+    const definition = getFighterDefinition("kaykit-knight");
+    const original = definition.attacks.jab;
+    // Push the only bubble far behind the attacker: an opponent in front must
+    // no longer be hit, proving authored hitboxes replace the derived chain.
+    definition.attacks.jab = {
+      ...original,
+      hitboxes: [{ offset: { x: -90, y: 10 }, radius: 12, kind: "sweet", priority: 2 }],
+    };
+    try {
+      const game = createGame(matchConfig(), {
+        countdownFrames: 0,
+        spawnPositions: [{ x: -30, y: 60 }, { x: 30, y: 60 }],
+      });
+      settle(game);
+      const attackerX = game.getSnapshot().fighters[0].position.x;
+      game.step([input({ held: ["attack"], pressed: ["attack"] }), createEmptyInput()]);
+      const seen = [];
+      for (let frame = 0; frame < original.startup + original.active + 2; frame += 1) {
+        seen.push(...game.debugActiveHitboxes());
+        game.step(idlePair());
+      }
+      expect(seen.length).toBeGreaterThan(0);
+      expect(seen.every((hitbox) => hitbox.slot === 0 && hitbox.move === "jab")).toBe(true);
+      expect(seen[0]!.position.x).toBeCloseTo(attackerX - 90, 0);
+      expect(seen[0]).toMatchObject({ radius: 12, kind: "sweet", priority: 2 });
+      expect(game.getSnapshot().fighters[1].percent).toBe(0);
+    } finally {
+      definition.attacks.jab = original;
+    }
+  });
+
+  it("reports no hitboxes outside a move's active frames", () => {
+    const game = createGame(matchConfig(), { countdownFrames: 0 });
+    settle(game);
+    expect(game.debugActiveHitboxes()).toEqual([]);
+  });
+});

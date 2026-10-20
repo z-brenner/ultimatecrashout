@@ -11,6 +11,383 @@
     }
   },
   "fighters": {
+    "buckle": {
+      "displayName": "Buckle",
+      "author": "Ultimate Crashout contributors",
+      "sourcePage": "https://github.com/z-brenner/ultimatecrashout",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "defaultFps": 12,
+      "preferredScale": 1,
+      "actions": {
+        "idle": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/idle.png",
+          "frameWidth": 160,
+          "frameHeight": 160,
+          "fps": 8
+        },
+        "crouch": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/crouch.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "walk": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/walk.png",
+          "frameWidth": 160,
+          "frameHeight": 160,
+          "fps": 10
+        },
+        "turn": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/turn.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "dash": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/dash.png",
+          "frameWidth": 160,
+          "frameHeight": 160,
+          "fps": 14
+        },
+        "run": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/run.png",
+          "frameWidth": 160,
+          "frameHeight": 160,
+          "fps": 14
+        },
+        "jump_squat": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/jump_squat.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "jump": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/jump.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "double_jump": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/double_jump.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "fall": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/fall.png",
+          "frameWidth": 160,
+          "frameHeight": 160,
+          "fps": 8
+        },
+        "fast_fall": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/fast_fall.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "jab": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/jab.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "dash_attack": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/dash_attack.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "forward_tilt": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/forward_tilt.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "up_tilt": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/up_tilt.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "down_tilt": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/down_tilt.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "forward_smash": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/forward_smash.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "up_smash": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/up_smash.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "down_smash": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/down_smash.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "neutral_air": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/neutral_air.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "forward_air": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/forward_air.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "back_air": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/back_air.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "up_air": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/up_air.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "down_air": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/down_air.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "neutral_special": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/neutral_special.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "side_special": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/side_special.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "up_special": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/up_special.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "down_special": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/down_special.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "spot_dodge": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/spot_dodge.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "roll_forward": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/roll_forward.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "roll_back": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/roll_back.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "air_dodge": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/air_dodge.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "shield": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/shield.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "item_hold": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/item_hold.png",
+          "frameWidth": 160,
+          "frameHeight": 160,
+          "fps": 8
+        },
+        "item_pickup": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/item_pickup.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "item_attack": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/item_attack.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "grab": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/grab.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "grab_hold": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/grab_hold.png",
+          "frameWidth": 160,
+          "frameHeight": 160,
+          "fps": 8
+        },
+        "grabbed": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/grabbed.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "forward_throw": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/forward_throw.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "back_throw": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/back_throw.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "up_throw": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/up_throw.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "down_throw": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/down_throw.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "hurt": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/hurt.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "knockback": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/knockback.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "downed": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/downed.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "ledge": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/ledge.png",
+          "frameWidth": 160,
+          "frameHeight": 160,
+          "fps": 8
+        },
+        "entrance": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/entrance.png",
+          "frameWidth": 160,
+          "frameHeight": 160
+        },
+        "taunt": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/taunt.png",
+          "frameWidth": 160,
+          "frameHeight": 160,
+          "fps": 10
+        },
+        "victory": {
+          "type": "strip",
+          "sheet": "fighters/buckle/sprites/victory.png",
+          "frameWidth": 160,
+          "frameHeight": 160,
+          "fps": 10
+        }
+      },
+      "slots": {
+        "direct": {
+          "idle": "idle",
+          "crouch": "crouch",
+          "walk": "walk",
+          "turn": "turn",
+          "dash": "dash",
+          "run": "run",
+          "jump_squat": "jump_squat",
+          "jump": "jump",
+          "double_jump": "double_jump",
+          "fall": "fall",
+          "fast_fall": "fast_fall",
+          "jab": "jab",
+          "dash_attack": "dash_attack",
+          "forward_tilt": "forward_tilt",
+          "up_tilt": "up_tilt",
+          "down_tilt": "down_tilt",
+          "forward_smash": "forward_smash",
+          "up_smash": "up_smash",
+          "down_smash": "down_smash",
+          "neutral_air": "neutral_air",
+          "forward_air": "forward_air",
+          "back_air": "back_air",
+          "up_air": "up_air",
+          "down_air": "down_air",
+          "neutral_special": "neutral_special",
+          "side_special": "side_special",
+          "up_special": "up_special",
+          "down_special": "down_special",
+          "spot_dodge": "spot_dodge",
+          "roll_forward": "roll_forward",
+          "roll_back": "roll_back",
+          "air_dodge": "air_dodge",
+          "shield": "shield",
+          "item_hold": "item_hold",
+          "item_pickup": "item_pickup",
+          "item_attack": "item_attack",
+          "grab": "grab",
+          "grab_hold": "grab_hold",
+          "grabbed": "grabbed",
+          "forward_throw": "forward_throw",
+          "back_throw": "back_throw",
+          "up_throw": "up_throw",
+          "down_throw": "down_throw",
+          "hurt": "hurt",
+          "knockback": "knockback",
+          "downed": "downed",
+          "ledge": "ledge",
+          "entrance": "entrance",
+          "taunt": "taunt",
+          "victory": "victory"
+        },
+        "adapted": {},
+        "author_required": {}
+      }
+    },
     "rgs-stick": {
       "displayName": "RGS Stick Figure",
       "author": "RGS_Dev",
