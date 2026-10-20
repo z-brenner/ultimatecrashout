@@ -59,10 +59,16 @@ test("embeds a complete public game bundle", async () => {
   const gameEntry = await readFile(resolve(publicRoot, "play/index.html"), "utf8");
   assert.match(gameEntry, /<title>Ultimate Crashout<\/title>/);
 
-  const assetUrls = [...gameEntry.matchAll(/(?:href|src)="(\/assets\/[^"]+)"/g)]
-    .map((match) => match[1]);
-  assert.ok(assetUrls.length >= 2, "expected the game entry to reference built assets");
-  await Promise.all(assetUrls.map((assetUrl) => access(resolve(publicRoot, `.${assetUrl}`))));
+  // Resolve each reference the way a browser does from /play/index.html, so
+  // both relative ("./assets/…") and root-absolute ("/assets/…") builds work.
+  const siteRoot = new URL("https://site.invalid/");
+  const entryUrl = new URL("play/index.html", siteRoot);
+  const assetPaths = [...gameEntry.matchAll(/(?:href|src)="([^"]*assets\/[^"]+)"/g)]
+    .map((match) => new URL(match[1], entryUrl))
+    .filter((url) => url.origin === siteRoot.origin)
+    .map((url) => decodeURIComponent(url.pathname.slice(1)));
+  assert.ok(assetPaths.length >= 2, "expected the game entry to reference built assets");
+  await Promise.all(assetPaths.map((assetPath) => access(resolve(publicRoot, assetPath))));
 });
 
 test("server-renders complete open asset credits", async () => {
