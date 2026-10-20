@@ -228,6 +228,21 @@ export const aerialAutoCancelled = (
     (window.after !== undefined && frame >= window.after);
 };
 
+/**
+ * Whether a move's active frames carry melee hitboxes. Projectile-only,
+ * counter, and pure absorb/reflect moves act through other systems.
+ */
+export const moveHasMeleeHitboxes = (
+  move: Pick<
+    AttackDefinition,
+    "projectile" | "alsoMelee" | "counters" | "damage" | "absorbsProjectiles" | "reflectsProjectiles"
+  >,
+): boolean => !(
+  (move.projectile && !move.alsoMelee) ||
+  move.counters ||
+  (move.damage <= 0 && (move.absorbsProjectiles || move.reflectsProjectiles))
+);
+
 const activeAuthoredHitboxes = (
   hitboxes: readonly AttackHitboxDefinition[],
   activeFrame: number,
@@ -3445,11 +3460,7 @@ export class CombatGame {
       const action = fighter.action;
       if (!action || action.charging) continue;
       const move = fighter.definition.attacks[action.name];
-      if (
-        (move.projectile && !move.alsoMelee) ||
-        move.counters ||
-        (move.damage <= 0 && (move.absorbsProjectiles || move.reflectsProjectiles))
-      ) continue;
+      if (!moveHasMeleeHitboxes(move)) continue;
       if (action.frame < move.startup || action.frame > move.startup + move.active - 1) continue;
       for (const hitbox of this.activeWorldHitboxes(fighter, action, move)) {
         result.push({
@@ -3621,14 +3632,7 @@ export class CombatGame {
       const action = activeActions[attacker.slot];
       if (!action || action.charging) continue;
       const move = attacker.definition.attacks[action.name];
-      if (
-        (move.projectile && !move.alsoMelee) ||
-        move.counters ||
-        (
-          move.damage <= 0 &&
-          (move.absorbsProjectiles || move.reflectsProjectiles)
-        )
-      ) continue;
+      if (!moveHasMeleeHitboxes(move)) continue;
       const firstActiveFrame = move.startup;
       const lastActiveFrame = move.startup + move.active - 1;
       if (action.frame < firstActiveFrame || action.frame > lastActiveFrame) continue;
