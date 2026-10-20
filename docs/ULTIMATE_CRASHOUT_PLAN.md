@@ -68,8 +68,9 @@ Ordered by how much they constrain the goals.
    live in a private, git-ignored vault; 3D also needs Blender + zsh. Running
    `scripts/open_fighter_pipeline/build_atlases.mjs` without that vault would
    rewrite `openAnimationMetadata.ts` with fewer fighters.
-9. **Dev server needs a restart after `fighter:build`**: fighter metadata is
-   injected through Vite `define` at config time.
+9. ~~Dev server needed a restart after `fighter:build`.~~ Fighter runtime data
+   is a virtual module now; `npm run dev` re-syncs packs on save and reloads
+   for new atlases.
 10. ~~The Lab's Hitbox checkbox was a placeholder.~~ It now draws the engine's
     frame data per move frame.
 11. **Skins**: `SkinId` declares 00–03, but only 00 exists anywhere.
@@ -105,8 +106,8 @@ Ordered by how much they constrain the goals.
    with the engine's hitboxes, hurtbox states, and key frames.
 5. ~~Base-path-safe asset URLs and a GitHub Pages deploy workflow~~ (done;
    Pages source must be set to "GitHub Actions").
-6. Hot reload of fighter metadata in `npm run dev` (virtual module instead of
-   `define`).
+6. ~~Hot reload of fighter metadata in `npm run dev`~~ (done): saving a pack
+   re-syncs and reloads; invalid packs show the validator error in the overlay.
 7. Replace Buckle's procedural strips with hand-drawn art (same filenames, no
    code change) and commission the logo.
 

@@ -118,6 +118,13 @@ regenerates:
 Do not edit these three outputs manually. They are also synchronized by
 `npm run dev`, `npm test`, and `npm run build`.
 
+While `npm run dev` is running you do not need to rebuild by hand for data
+changes. Saving a `fighter.json` or `render.json` re-syncs the registry and
+reloads the page. Rebuilt atlases (`npm run fighter:build -- <id>` in another
+terminal) are picked up the same way, with no server restart. An invalid pack
+shows the validator's message, with the exact field, in the browser's error
+overlay; the next valid save clears it.
+
 The targeted `npm run fighter:build -- <id>` command automatically regenerates
 the fighter thumbnail. After manually replacing multiple fighter portraits or
 stage previews, run `npm run optimize:ui-assets`.
@@ -214,6 +221,8 @@ super armor.
 
 `npm run fighter:build` validates every override and reports the exact field
 that is wrong; the full contract is in [fighter.schema.json](fighter.schema.json).
+With `npm run dev` running, just save `fighter.json`: the page reloads with the
+new frame data, or shows the validation error.
 Turn on the in-match hitbox overlay (see "Debugging moves" below) while tuning.
 
 ## Syncing animation to hitboxes

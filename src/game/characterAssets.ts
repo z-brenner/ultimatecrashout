@@ -1,3 +1,4 @@
+import { OPEN_2D_RUNTIME_CONTENT as OPEN_2D_RUNTIME_DATA } from "virtual:open-fighter-runtime";
 import {
   type FighterId,
   type Open2DFighterId,
@@ -127,7 +128,7 @@ interface Open2DRuntimeContent {
   };
 }
 
-const OPEN_2D_RUNTIME_CONTENT = __OPEN_2D_RUNTIME_CONTENT__ as Open2DRuntimeContent;
+const OPEN_2D_RUNTIME_CONTENT = OPEN_2D_RUNTIME_DATA as Open2DRuntimeContent;
 
 export interface RemoteAnimationDefinition {
   /** Static frame atlas rendered locally from the source asset. */

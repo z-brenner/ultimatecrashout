@@ -1,3 +1,4 @@
+import { OPEN_FIGHTER_RUNTIME_STATUS as OPEN_FIGHTER_RUNTIME_DATA } from "virtual:open-fighter-runtime";
 import type { FighterId, OpenFighterId, SkinId } from "./contracts";
 import type { RemoteAnimationSlot } from "./characterAssets";
 import { OPEN_FIGHTER_PACKS } from "./generated/openFighterRegistry";
@@ -25,7 +26,7 @@ interface FighterRuntimeStatus {
   productionReady: boolean;
 }
 
-const OPEN_FIGHTER_RUNTIME_STATUS = __OPEN_FIGHTER_RUNTIME_STATUS__ as Readonly<
+const OPEN_FIGHTER_RUNTIME_STATUS = OPEN_FIGHTER_RUNTIME_DATA as Readonly<
   Partial<Record<OpenFighterId, FighterRuntimeStatus>>
 >;
 

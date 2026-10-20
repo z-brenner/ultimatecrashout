@@ -294,6 +294,8 @@ const generatedRegistry = (loaded) => {
 };
 
 const writeAtomic = async (path, content) => {
+  // Unchanged outputs are left alone so the dev server does not reload for nothing.
+  if (await readFile(path, "utf8").then((current) => current === content, () => false)) return;
   await mkdir(dirname(path), { recursive: true });
   const temporary = `${path}.tmp-${process.pid}`;
   await writeFile(temporary, content);
