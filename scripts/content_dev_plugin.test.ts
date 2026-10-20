@@ -30,7 +30,10 @@ const deadPid = () => spawnSync(process.execPath, ["-e", ""]).pid!;
 import { OPEN_2D_FIGHTER_IDS, OPEN_3D_FIGHTER_IDS } from "../src/game/generated/openFighterRegistry";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+/** Lets timers run; only for asserting that nothing happened. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
+/** Positive checks poll: CI timers (Windows: ~16 ms granularity) are coarse. */
+const eventually = (assertion: () => void) => vi.waitFor(assertion, { timeout: 2000, interval: 5 });
 
 describe("open fighter runtime module", () => {
   it("reports readiness for every registered fighter", () => {
@@ -138,9 +141,9 @@ describe("content watch plugin", () => {
     emit("change", "fighters/buckle/fighter.json");
     emit("add", "fighters/buckle/sprites/jab.png");
     emit("change", "src/game/engine.ts");
+    await eventually(() => expect(runSync).toHaveBeenCalledWith(root, "scripts/fighter_packs.mjs"));
     await settle();
     expect(runSync).toHaveBeenCalledTimes(1);
-    expect(runSync).toHaveBeenCalledWith(root, "scripts/fighter_packs.mjs");
     // Success needs no reload of its own: the rewritten registry triggers one.
     expect(ws.send).not.toHaveBeenCalled();
   });
@@ -151,6 +154,7 @@ describe("content watch plugin", () => {
     expect(plugin.hotUpdate({ file: join(root, "src/game/engine.ts") })).toBeUndefined();
     emit("change", "src/game/generated/openFighterRegistry.ts");
     emit("change", "scripts/open_fighter_pipeline/manifest.json");
+    await eventually(() => expect(sent()).toEqual([{ type: "full-reload" }]));
     await settle();
     expect(sent()).toEqual([{ type: "full-reload" }]);
     expect(moduleGraph.invalidateModule).toHaveBeenCalledTimes(1);
@@ -174,10 +178,13 @@ describe("content watch plugin", () => {
 
       rmSync(join(buildRoot, lock));
       emit("unlink", lock);
+      await eventually(() => {
+        expect(runSync).toHaveBeenCalledWith(buildRoot, "scripts/stage_packs.mjs");
+        expect(sent()).toEqual([{ type: "full-reload" }]);
+      });
       await settle();
       expect(runSync).toHaveBeenCalledTimes(1);
-      expect(runSync).toHaveBeenCalledWith(buildRoot, "scripts/stage_packs.mjs");
-      expect(sent()).toEqual([{ type: "full-reload" }]);
+      expect(sent()).toHaveLength(1);
     } finally {
       rmSync(buildRoot, { recursive: true, force: true });
     }
@@ -195,8 +202,7 @@ describe("content watch plugin", () => {
       // The owner dies without removing its lock: the poll releases it.
       rmSync(join(buildRoot, lock));
       writeLock(buildRoot, deadPid());
-      await settle();
-      expect(sent()).toEqual([{ type: "full-reload" }]);
+      await eventually(() => expect(sent()).toEqual([{ type: "full-reload" }]));
     } finally {
       rmSync(buildRoot, { recursive: true, force: true });
     }
@@ -213,11 +219,11 @@ describe("content watch plugin", () => {
     const runSync = vi.fn(async (_root: string, script: string) => results[script]!.shift()!);
     const { emit, ws, sent } = startServer(runSync);
     emit("change", "fighters/buckle/fighter.json");
-    await settle();
-    expect(sent().at(-1)?.err?.message).toContain("jab.startup must be a positive integer");
+    await eventually(() => expect(sent().at(-1)?.err?.message).toContain("jab.startup must be a positive integer"));
 
     // A good stage save must not hide the still-invalid fighter pack.
     emit("change", "stages/crash-course/stage.json");
+    await eventually(() => expect(runSync).toHaveBeenCalledWith(root, "scripts/stage_packs.mjs"));
     await settle();
     expect(sent().filter(({ type }) => type === "full-reload")).toEqual([]);
 
@@ -230,8 +236,7 @@ describe("content watch plugin", () => {
 
     // Fixing the fighter clears the overlay, even if the registry is unchanged.
     emit("change", "fighters/buckle/fighter.json");
-    await settle();
-    expect(sent().at(-1)).toEqual({ type: "full-reload" });
+    await eventually(() => expect(sent().at(-1)).toEqual({ type: "full-reload" }));
     const laterSocket = { send: vi.fn() };
     ws.emit("connection", laterSocket);
     expect(laterSocket.send).not.toHaveBeenCalled();
@@ -242,13 +247,12 @@ describe("content watch plugin", () => {
     const runSync = vi.fn(() => new Promise<SyncResult>((resolve) => { finish = resolve; }));
     const { emit } = startServer(runSync);
     emit("change", "fighters/buckle/fighter.json");
-    await settle();
+    await eventually(() => expect(runSync).toHaveBeenCalledTimes(1));
     emit("change", "fighters/buckle/fighter.json");
     await settle();
     expect(runSync).toHaveBeenCalledTimes(1);
     finish({ ok: true, output: "" });
-    await settle();
-    expect(runSync).toHaveBeenCalledTimes(2);
+    await eventually(() => expect(runSync).toHaveBeenCalledTimes(2));
     finish({ ok: true, output: "" });
   });
 
@@ -258,12 +262,12 @@ describe("content watch plugin", () => {
       .mockResolvedValueOnce({ ok: true, output: "" });
     const { emit, sent } = startServer(runSync);
     emit("change", "stages/crash-course/stage.json");
-    await settle();
-    expect(sent().at(-1)?.err?.message).toContain("spawn ENOENT");
+    await eventually(() => expect(sent().at(-1)?.err?.message).toContain("spawn ENOENT"));
     emit("change", "stages/crash-course/stage.json");
-    await settle();
-    expect(runSync).toHaveBeenCalledTimes(2);
-    expect(sent().at(-1)).toEqual({ type: "full-reload" });
+    await eventually(() => {
+      expect(runSync).toHaveBeenCalledTimes(2);
+      expect(sent().at(-1)).toEqual({ type: "full-reload" });
+    });
   });
 
   it("stays inert inside Vitest", () => {
