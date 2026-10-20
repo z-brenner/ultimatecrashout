@@ -1,4 +1,5 @@
 import type { FighterId, OpenFighterId, SkinId } from "./contracts";
+import type { RemoteAnimationSlot } from "./characterAssets";
 import { OPEN_FIGHTER_PACKS } from "./generated/openFighterRegistry";
 import { publicAsset } from "./publicAsset";
 
@@ -12,6 +13,11 @@ export interface FighterVisualManifest {
   attribution: string;
   sourcePage: string;
   license: { id: string; url?: string };
+  /**
+   * Per attack slot: the atlas frame that should be on screen on the move's
+   * first active frame (see moveAnimationFrame).
+   */
+  keyFrames: Readonly<Partial<Record<RemoteAnimationSlot, number>>>;
 }
 
 interface FighterRuntimeStatus {
@@ -34,6 +40,10 @@ export const FIGHTER_VISUAL_MANIFESTS = Object.fromEntries(
     attribution: pack.visual.attribution,
     sourcePage: pack.visual.sourcePage,
     license: pack.visual.license,
+    // Optional, so absent from most packs' literal types.
+    keyFrames: (pack.visual as {
+      keyFrames?: Readonly<Partial<Record<RemoteAnimationSlot, number>>>;
+    }).keyFrames ?? {},
   } satisfies FighterVisualManifest]),
 ) as unknown as Readonly<Record<FighterId, FighterVisualManifest>>;
 

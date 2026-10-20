@@ -4,6 +4,8 @@ import type { FighterSnapshot } from "./engine";
 import { getFighterDefinition } from "./roster";
 import {
   CHARACTER_ATLAS_REVISION,
+  firstHitFrame,
+  moveAnimationFrame,
   CHARACTER_PORTRAITS,
   CharacterSpriteLibrary,
   FIGHTER_VISUAL_MANIFESTS,
@@ -322,5 +324,73 @@ describe("remoteAnimationSlotForFighter", () => {
     [fighter({ state: "victory" }), "victory"],
   ] as const)("maps an open fighter snapshot to %s", (snapshot, expected) => {
     expect(remoteAnimationSlotForFighter(snapshot)).toBe(expected);
+  });
+});
+
+describe("move animation key frames", () => {
+  const move = { startup: 6, active: 4, recovery: 10 };
+
+  it("keeps the even stretch when no key frame is authored", () => {
+    const legacy = (frame: number, count: number) => {
+      const total = move.startup + move.active + move.recovery;
+      return Math.min(count - 1, Math.floor(Math.min(1, frame / (total - 1)) * count));
+    };
+    for (let frame = 0; frame < 20; frame += 1) {
+      expect(moveAnimationFrame(frame, move, 8)).toBe(legacy(frame, 8));
+    }
+  });
+
+  it("lands the key frame exactly on the first active frame", () => {
+    for (const keyFrame of [0, 1, 3, 7]) {
+      expect(moveAnimationFrame(move.startup, move, 8, keyFrame)).toBe(keyFrame);
+      expect(moveAnimationFrame(move.startup - 1, move, 8, keyFrame)).toBeLessThanOrEqual(keyFrame);
+    }
+    expect(moveAnimationFrame(0, move, 8, 3)).toBe(0);
+    expect(moveAnimationFrame(19, move, 8, 3)).toBe(7);
+  });
+
+  it("never runs backwards through the clip", () => {
+    for (const keyFrame of [0, 2, 5, 7]) {
+      let previous = 0;
+      for (let frame = 0; frame < 20; frame += 1) {
+        const index = moveAnimationFrame(frame, move, 8, keyFrame);
+        expect(index).toBeGreaterThanOrEqual(previous);
+        expect(index).toBeLessThan(8);
+        previous = index;
+      }
+    }
+  });
+
+  it("waits for authored hitboxes that come out after the first active frame", () => {
+    const delayed = {
+      ...move,
+      hitboxes: [
+        { offset: { x: 0, y: 0 }, radius: 10, activeStart: 3 },
+        { offset: { x: 0, y: 0 }, radius: 10, activeStart: 2 },
+      ],
+    };
+    expect(firstHitFrame(move)).toBe(move.startup);
+    expect(firstHitFrame(delayed)).toBe(move.startup + 2);
+    expect(moveAnimationFrame(move.startup + 2, delayed, 8, 4)).toBe(4);
+    expect(moveAnimationFrame(move.startup + 1, delayed, 8, 4)).toBeLessThan(4);
+    // An activeStart past the active window clamps to its last frame.
+    expect(firstHitFrame({ ...move, hitboxes: [{ offset: { x: 0, y: 0 }, radius: 10, activeStart: 99 }] }))
+      .toBe(move.startup + move.active - 1);
+  });
+
+  it("ignores a key frame outside the clip instead of freezing", () => {
+    expect(moveAnimationFrame(10, move, 8, 12)).toBe(moveAnimationFrame(10, move, 8));
+  });
+
+  it("only declares key frames that exist in each fighter's atlases", () => {
+    for (const fighter of FIGHTER_IDS) {
+      const { animations } = remoteAnimationSetForFighter(fighter, "00");
+      for (const [slot, keyFrame] of Object.entries(FIGHTER_VISUAL_MANIFESTS[fighter].keyFrames)) {
+        const definition = animations[slot as keyof typeof animations];
+        expect(definition, `${fighter}.${slot}`).toBeDefined();
+        expect(keyFrame, `${fighter}.${slot}`).toBeLessThan(definition.frameCount);
+      }
+    }
+    expect(Object.keys(FIGHTER_VISUAL_MANIFESTS.buckle.keyFrames)).toContain("forward_smash");
   });
 });

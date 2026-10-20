@@ -159,6 +159,30 @@
             "id": { "type": "string", "minLength": 1 },
             "url": { "type": "string", "format": "uri" }
           }
+        },
+        "keyFrames": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Per attack slot: the atlas frame (0-based) shown on the move's first active frame. Earlier frames fill startup; later frames fill active and recovery.",
+          "properties": {
+            "jab": { "type": "integer", "minimum": 0 },
+            "dash_attack": { "type": "integer", "minimum": 0 },
+            "forward_tilt": { "type": "integer", "minimum": 0 },
+            "up_tilt": { "type": "integer", "minimum": 0 },
+            "down_tilt": { "type": "integer", "minimum": 0 },
+            "forward_smash": { "type": "integer", "minimum": 0 },
+            "up_smash": { "type": "integer", "minimum": 0 },
+            "down_smash": { "type": "integer", "minimum": 0 },
+            "neutral_air": { "type": "integer", "minimum": 0 },
+            "forward_air": { "type": "integer", "minimum": 0 },
+            "back_air": { "type": "integer", "minimum": 0 },
+            "up_air": { "type": "integer", "minimum": 0 },
+            "down_air": { "type": "integer", "minimum": 0 },
+            "neutral_special": { "type": "integer", "minimum": 0 },
+            "side_special": { "type": "integer", "minimum": 0 },
+            "up_special": { "type": "integer", "minimum": 0 },
+            "down_special": { "type": "integer", "minimum": 0 }
+          }
         }
       }
     },

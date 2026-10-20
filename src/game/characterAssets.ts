@@ -13,7 +13,7 @@ import {
   type FighterVisualManifest,
 } from "./fighterVisuals";
 import { OPEN_ANIMATION_METADATA } from "./openAnimationMetadata";
-import { FIGHTER_IDS, getFighterDefinition, type MoveName } from "./roster";
+import { FIGHTER_IDS, getFighterDefinition, type AttackDefinition, type MoveName } from "./roster";
 import { publicAsset } from "./publicAsset";
 
 const ALL_SKIN_IDS = ["00", "01", "02", "03"] as const satisfies readonly SkinId[];
@@ -408,6 +408,48 @@ export function animationForFighter(fighter: FighterSnapshot): CharacterAnimatio
   if (Math.abs(fighter.velocity.x) > 35) return "run";
   return "idle";
 }
+
+type MoveTiming = Readonly<
+  Pick<AttackDefinition, "startup" | "active" | "recovery" | "hitboxes">
+>;
+
+/**
+ * Move frame on which the first hitbox can connect: the first active frame,
+ * delayed when every authored hitbox starts later (activeStart).
+ */
+export const firstHitFrame = (move: MoveTiming): number => {
+  const offset = move.hitboxes?.length
+    ? Math.min(...move.hitboxes.map((hitbox) => Math.max(0, hitbox.activeStart ?? 0)))
+    : 0;
+  return move.startup + Math.min(offset, Math.max(0, move.active - 1));
+};
+
+/**
+ * Atlas frame for a move on `moveFrame`. Without a key frame the clip is
+ * stretched evenly over the whole move. With one, frames before it fill the
+ * wind-up, the key frame lands exactly on the first frame a hitbox is out,
+ * and the rest fill the remaining frames, so a strike pose meets its hitbox.
+ */
+export const moveAnimationFrame = (
+  moveFrame: number,
+  move: MoveTiming,
+  frameCount: number,
+  keyFrame?: number,
+): number => {
+  const lastFrame = Math.max(0, frameCount - 1);
+  const totalFrames = move.startup + move.active + move.recovery;
+  if (keyFrame === undefined || keyFrame < 0 || keyFrame > lastFrame) {
+    const progress = Math.min(1, moveFrame / Math.max(1, totalFrames - 1));
+    return Math.min(lastFrame, Math.floor(progress * frameCount));
+  }
+  const strikeFrame = firstHitFrame(move);
+  if (moveFrame < strikeFrame) {
+    return Math.floor((moveFrame / strikeFrame) * keyFrame);
+  }
+  const after = totalFrames - strikeFrame;
+  const progress = Math.min(1, (moveFrame - strikeFrame) / Math.max(1, after - 1));
+  return Math.min(lastFrame, keyFrame + Math.floor(progress * (frameCount - keyFrame)));
+};
 
 const MOVE_ANIMATION_SLOT: Readonly<Record<MoveName, RemoteAnimationSlot>> = {
   jab: "jab",
@@ -933,12 +975,11 @@ export class CharacterSpriteLibrary {
     elapsedSeconds: number,
   ): number {
     if (fighter.currentMove) {
-      const move = getFighterDefinition(fighter.fighter).attacks[fighter.currentMove];
-      const totalFrames = move.startup + move.active + move.recovery;
-      const progress = Math.min(1, fighter.moveFrame / Math.max(1, totalFrames - 1));
-      return Math.min(
-        definition.frameCount - 1,
-        Math.floor(progress * definition.frameCount),
+      return moveAnimationFrame(
+        fighter.moveFrame,
+        getFighterDefinition(fighter.fighter).attacks[fighter.currentMove],
+        definition.frameCount,
+        FIGHTER_VISUAL_MANIFESTS[fighter.fighter].keyFrames[slot],
       );
     }
 
