@@ -70,7 +70,8 @@ Ordered by how much they constrain the goals.
    rewrite `openAnimationMetadata.ts` with fewer fighters.
 9. **Dev server needs a restart after `fighter:build`**: fighter metadata is
    injected through Vite `define` at config time.
-10. **Lab "Hitbox" checkbox is a placeholder** (empty overlay); use F9 in a match.
+10. ~~The Lab's Hitbox checkbox was a placeholder.~~ It now draws the engine's
+    frame data per move frame.
 11. **Skins**: `SkinId` declares 00–03, but only 00 exists anywhere.
 12. **UI code size**: `ui.ts` (~2.5k lines of HTML strings) and `styles.css`
     (~5.5k lines with a late identity override layer) are workable but brittle
@@ -100,8 +101,8 @@ Ordered by how much they constrain the goals.
    `knockbackGrowth`.
 3. ~~Animation key frames~~ (done): `visual.keyFrames` pins an attack's strike
    pose to its first active frame.
-4. Real Lab hitbox viewer: step any fighter's move frame by frame with the
-   engine's own hitbox data.
+4. ~~Real Lab hitbox viewer~~ (done): attack slots step engine move frames
+   with the engine's hitboxes, hurtbox states, and key frames.
 5. ~~Base-path-safe asset URLs and a GitHub Pages deploy workflow~~ (done;
    Pages source must be set to "GitHub Actions").
 6. Hot reload of fighter metadata in `npm run dev` (virtual module instead of

@@ -471,6 +471,12 @@ const MOVE_ANIMATION_SLOT: Readonly<Record<MoveName, RemoteAnimationSlot>> = {
   "down-special": "down_special",
 };
 
+/** Attack animation slot to the move whose timing drives it. */
+export const ANIMATION_SLOT_MOVE: Readonly<Partial<Record<RemoteAnimationSlot, MoveName>>> =
+  Object.fromEntries(
+    Object.entries(MOVE_ANIMATION_SLOT).map(([move, slot]) => [slot, move]),
+  ) as Partial<Record<RemoteAnimationSlot, MoveName>>;
+
 export function remoteAnimationSlotForFighter(
   fighter: FighterSnapshot,
 ): RemoteAnimationSlot | null {

@@ -5,8 +5,13 @@ import {
   TEST_LAB_EFFECTS,
   TestLabController,
   labFrameAtTime,
+  labMoveFrameData,
 } from "./testLab";
 import { OPEN_FIGHTER_IDS } from "../game/contracts";
+import { competitiveHitboxesForMove, createEmptyInput, createGame } from "../game/engine";
+import { getFighterDefinition } from "../game/roster";
+import { remoteAnimationSetForFighter } from "../game/characterAssets";
+import { DEFAULT_STAGE_ID } from "../game/stages";
 
 const loadedSources: string[] = [];
 
@@ -117,3 +122,117 @@ describe("Test Lab animation transport", () => {
     controller.destroy();
   });
 });
+
+describe("Test Lab move frame data", () => {
+  const fsmash = getFighterDefinition("buckle").attacks["forward-smash"];
+  const labSpriteCount = () =>
+    remoteAnimationSetForFighter("buckle", "00").animations.forward_smash.frameCount;
+
+  it("only applies to attack animation slots", () => {
+    expect(labMoveFrameData("buckle", "idle", 0, 6)).toBeNull();
+    expect(labMoveFrameData("buckle", "grab", 0, 6)).toBeNull();
+    expect(labMoveFrameData("buckle", "jab", 0, 5)?.move).toBe("jab");
+  });
+
+  it("reports phases, key frames, armor, and the engine's hitboxes per move frame", () => {
+    const total = fsmash.startup + fsmash.active + fsmash.recovery;
+    const windup = labMoveFrameData("buckle", "forward_smash", fsmash.startup - 1, 8)!;
+    expect(windup).toMatchObject({ phase: "startup", totalFrames: total, hitboxes: [] });
+    expect(windup.armored).toBe(true);
+
+    const strike = labMoveFrameData("buckle", "forward_smash", fsmash.startup, 8)!;
+    expect(strike.phase).toBe("active");
+    expect(strike.strikeFrame).toBe(fsmash.startup);
+    expect(strike.atlasFrame).toBe(strike.keyFrame);
+    expect(strike.hitboxes).toEqual(competitiveHitboxesForMove("forward-smash", fsmash, 0));
+    expect(strike.hitboxes.length).toBeGreaterThan(0);
+
+    const end = labMoveFrameData("buckle", "forward_smash", total + 50, 8)!;
+    expect(end).toMatchObject({ phase: "recovery", moveFrame: total - 1, hitboxes: [] });
+  });
+
+  it("shows no melee hitboxes for projectile-only specials", () => {
+    const special = getFighterDefinition("buckle").attacks["neutral-special"];
+    expect(special.projectile).toBeDefined();
+    const active = labMoveFrameData("buckle", "neutral_special", special.startup, 7)!;
+    expect(active.phase).toBe("active");
+    expect(active.hitboxes).toEqual([]);
+  });
+
+  it("matches the live engine's hitboxes on the same move frame", () => {
+    const game = createGame({
+      players: [
+        { fighter: "buckle", skin: "00", name: "P1", slot: 0, cpu: false, cpuLevel: 1 },
+        { fighter: "rgs-stick", skin: "00", name: "P2", slot: 1, cpu: false, cpuLevel: 1 },
+      ],
+      stocks: 3,
+      items: false,
+      itemFrequency: "medium",
+      stage: DEFAULT_STAGE_ID,
+    }, { countdownFrames: 0, spawnPositions: [{ x: -200, y: 60 }, { x: 200, y: 60 }] });
+    for (let frame = 0; frame < 30; frame += 1) game.step([createEmptyInput(), createEmptyInput()]);
+    const jab = createEmptyInput();
+    jab.held.add("attack");
+    jab.pressed.add("attack");
+    game.step([jab, createEmptyInput()]);
+    let compared = 0;
+    for (let frame = 0; frame < 12; frame += 1) {
+      const fighter = game.getSnapshot().fighters[0];
+      const live = game.debugActiveHitboxes();
+      if (fighter.currentMove === "jab") {
+        const lab = labMoveFrameData("buckle", "jab", fighter.moveFrame, 5)!;
+        expect(lab.hitboxes.length).toBe(live.length);
+        lab.hitboxes.forEach((hitbox, index) => {
+          expect(live[index]!.position.x).toBeCloseTo(fighter.position.x + hitbox.offset.x * fighter.facing, 5);
+          expect(live[index]!.position.y).toBeCloseTo(fighter.position.y + hitbox.offset.y, 5);
+          expect(live[index]!.radius).toBe(hitbox.radius);
+        });
+        if (live.length > 0) compared += 1;
+      }
+      game.step([createEmptyInput(), createEmptyInput()]);
+    }
+    expect(compared).toBeGreaterThan(0);
+  });
+
+  it("switches the transport to engine move frames for attack animations", () => {
+    vi.stubGlobal("Image", LabImage);
+    vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      clearRect: vi.fn(),
+      drawImage: vi.fn(),
+      save: vi.fn(),
+      restore: vi.fn(),
+      translate: vi.fn(),
+      scale: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    const root = document.createElement("div");
+    document.body.append(root);
+    const controller = new TestLabController(root);
+    const select = (field: string, value: string) => {
+      const element = root.querySelector<HTMLSelectElement>(`[data-lab-field='${field}']`)!;
+      element.value = value;
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    const slider = root.querySelector<HTMLInputElement>("[data-lab-field='frame']")!;
+    const label = () => root.querySelector<HTMLOutputElement>("[data-lab-frame]")!.value;
+
+    select("fighter", "buckle");
+    select("animation", "idle");
+    expect(label()).toMatch(/^Frame 1 \//);
+
+    select("animation", "forward_smash");
+    const total = fsmash.startup + fsmash.active + fsmash.recovery;
+    expect(slider.max).toBe(String(total - 1));
+    expect(label()).toBe(`Move frame 1 / ${total} · startup · sprite 1 / ${labSpriteCount()}`);
+    for (let step = 0; step < fsmash.startup; step += 1) {
+      root.querySelector<HTMLButtonElement>("[data-lab-action='next']")!.click();
+    }
+    expect(label()).toContain(`Move frame ${fsmash.startup + 1} / ${total} · active`);
+    expect(root.querySelector<HTMLOutputElement>("[data-lab-engine-state]")!.value)
+      .toContain("forward-smash · strike on move frame");
+    expect(root.querySelector<HTMLButtonElement>("[data-lab-play]")!.textContent).toBe("Play");
+    controller.destroy();
+  });
+});
+

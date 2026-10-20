@@ -1,22 +1,29 @@
 import {
+  ANIMATION_SLOT_MOVE,
   REMOTE_ANIMATION_CONFIG,
   REMOTE_ANIMATION_SLOTS,
+  firstHitFrame,
   isFighterVisualReady,
+  moveAnimationFrame,
   remoteAnimationSetForFighter,
   type RemoteAnimationDefinition,
   type RemoteAnimationSlot,
 } from "../game/characterAssets";
+import { FIGHTER_VISUAL_MANIFESTS } from "../game/fighterVisuals";
 import { FIGHTER_SKINS } from "../game/content";
 import type { FighterId, InputFrame, SkinId, StageId } from "../game/contracts";
 import {
+  competitiveHitboxesForMove,
   createEmptyInput,
   createGame,
   fighterHurtboxProfile,
+  moveFrameWindowActive,
+  type ActiveMeleeHitbox,
   type GameEvent,
 } from "../game/engine";
 import { ITEM_DEFINITIONS, isAutomaticItem, type ItemKind } from "../game/items";
-import { FIGHTER_IDS, getFighterDefinition } from "../game/roster";
-import { spritePixelScale } from "../game/render";
+import { FIGHTER_IDS, getFighterDefinition, type MoveName } from "../game/roster";
+import { findOpaquePixelBounds, spritePixelScale } from "../game/render";
 import {
   DEFAULT_STAGE_ID,
   STAGE_DEFINITIONS,
@@ -47,8 +54,70 @@ export interface LabPlaybackState {
   speed: number;
   loop: boolean;
   playing: boolean;
+  /** Atlas frame on screen. In move mode it is derived from moveFrame. */
   frame: number;
+  /** Engine frame of the move (0 = first frame), used for attack slots. */
+  moveFrame: number;
 }
+
+export type LabMovePhase = "startup" | "active" | "recovery";
+
+export interface LabMoveFrameData {
+  move: MoveName;
+  moveFrame: number;
+  totalFrames: number;
+  phase: LabMovePhase;
+  /** Atlas frame the game shows on this move frame (key frames applied). */
+  atlasFrame: number;
+  keyFrame: number | null;
+  /** Move frame the key frame is pinned to (first frame a hitbox can connect). */
+  strikeFrame: number;
+  /** Melee hitboxes able to connect on this frame, in fighter-local units. */
+  hitboxes: ActiveMeleeHitbox[];
+  intangible: boolean;
+  armored: boolean;
+}
+
+/**
+ * What the engine does on one frame of an attack, for the Lab's frame-data
+ * view. Mirrors the engine's melee gating: projectile-only, counter, and
+ * pure absorb/reflect moves have no melee hitboxes.
+ */
+export const labMoveFrameData = (
+  fighter: FighterId,
+  slot: RemoteAnimationSlot,
+  moveFrame: number,
+  frameCount: number,
+): LabMoveFrameData | null => {
+  const moveName = ANIMATION_SLOT_MOVE[slot];
+  if (!moveName) return null;
+  const move = getFighterDefinition(fighter).attacks[moveName];
+  const totalFrames = move.startup + move.active + move.recovery;
+  const frame = Math.max(0, Math.min(totalFrames - 1, Math.floor(moveFrame)));
+  const phase: LabMovePhase = frame < move.startup
+    ? "startup"
+    : frame < move.startup + move.active ? "active" : "recovery";
+  const melee = !(
+    (move.projectile && !move.alsoMelee) ||
+    move.counters ||
+    (move.damage <= 0 && (move.absorbsProjectiles || move.reflectsProjectiles))
+  );
+  const keyFrame = FIGHTER_VISUAL_MANIFESTS[fighter].keyFrames[slot] ?? null;
+  return {
+    move: moveName,
+    moveFrame: frame,
+    totalFrames,
+    phase,
+    atlasFrame: moveAnimationFrame(frame, move, frameCount, keyFrame ?? undefined),
+    keyFrame,
+    strikeFrame: firstHitFrame(move),
+    hitboxes: melee && phase === "active"
+      ? competitiveHitboxesForMove(moveName, move, frame - move.startup)
+      : [],
+    intangible: moveFrameWindowActive(move.intangible, frame),
+    armored: moveFrameWindowActive(move.superArmor, frame),
+  };
+};
 
 export const labFrameAtTime = (
   definition: Pick<RemoteAnimationDefinition, "frameCount" | "fps">,
@@ -92,7 +161,10 @@ export class TestLabController {
     loop: true,
     playing: true,
     frame: 0,
+    moveFrame: 0,
   };
+  private showFrameData = false;
+  private readonly boundsCanvas = document.createElement("canvas");
   private elapsed = 0;
   private previousTimestamp = performance.now();
   private raf = 0;
@@ -142,7 +214,7 @@ export class TestLabController {
       .join("");
     return `
       <div class="cc-lab-workbench">
-        <aside class="cc-lab-reel" aria-label="Lab selectorsoratoire">
+        <aside class="cc-lab-reel" aria-label="Lab selectors">
           <div class="cc-lab-reel__label"><span>Bank A</span><strong>Fighter</strong></div>
           <label>Fighter
             <select data-lab-field="fighter">
@@ -193,7 +265,6 @@ export class TestLabController {
             <canvas data-lab-canvas width="512" height="512" aria-label="Animation frame"></canvas>
             <div class="cc-lab-effect" data-lab-effect="none" aria-hidden="true"><i></i><b></b><em></em></div>
             <div class="cc-lab-overlay cc-lab-overlay--hurt" data-lab-overlay="hurt" hidden></div>
-            <div class="cc-lab-overlay cc-lab-overlay--hit" data-lab-overlay="hit" hidden></div>
             <svg class="cc-lab-overlay cc-lab-overlay--collision" data-lab-overlay="collision" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid meet" aria-label="Solid volumes, platforms, and stage ledges" hidden>
               ${this.stageCollisionMarkup(DEFAULT_STAGE_ID)}
             </svg>
@@ -214,7 +285,7 @@ export class TestLabController {
           </div>
           <div class="cc-lab-debug">
             <label><input type="checkbox" data-lab-overlay-toggle="hurt"> Hurtbox</label>
-            <label><input type="checkbox" data-lab-overlay-toggle="hit"> Hitbox</label>
+            <label><input type="checkbox" data-lab-overlay-toggle="hit"> Hitboxes &amp; frame data</label>
             <label><input type="checkbox" data-lab-overlay-toggle="collision"> Collisions</label>
             <output data-lab-engine-state>playing=true · loop=true · facing=1</output>
           </div>
@@ -226,13 +297,15 @@ export class TestLabController {
     if (reset) {
       this.elapsed = 0;
       this.state.frame = 0;
+      this.state.moveFrame = 0;
     }
     const definition = this.definition();
     this.image.src = definition.mediaUrl;
+    this.syncMoveFrame();
     const slider = this.root.querySelector<HTMLInputElement>("[data-lab-field='frame']");
     if (slider) {
-      slider.max = String(Math.max(0, definition.frameCount - 1));
-      slider.value = String(this.state.frame);
+      slider.max = String(Math.max(0, this.timelineLength() - 1));
+      slider.value = String(this.timelinePosition());
     }
     this.canvas.style.filter = "none";
     this.updateHurtboxOverlay();
@@ -244,7 +317,22 @@ export class TestLabController {
     if (this.destroyed) return;
     const dt = Math.min(0.1, Math.max(0, (timestamp - this.previousTimestamp) / 1000));
     this.previousTimestamp = timestamp;
-    if (this.state.playing && this.image.complete && this.image.naturalWidth > 0) {
+    if (this.state.playing && this.image.complete && this.image.naturalWidth > 0 && this.moveData()) {
+      this.elapsed += dt;
+      const total = this.timelineLength();
+      const raw = Math.floor(this.elapsed * 60 * this.state.speed);
+      const next = this.state.loop ? raw % total : Math.min(total - 1, raw);
+      if (next !== this.state.moveFrame) {
+        this.state.moveFrame = next;
+        this.syncMoveFrame();
+        this.draw();
+        this.updateLabels();
+      }
+      if (!this.state.loop && next === total - 1) {
+        this.state.playing = false;
+        this.updateLabels();
+      }
+    } else if (this.state.playing && this.image.complete && this.image.naturalWidth > 0) {
       this.elapsed += dt;
       const nextFrame = labFrameAtTime(
         this.definition(),
@@ -290,7 +378,102 @@ export class TestLabController {
       this.canvas.height,
     );
     ctx.restore();
+    if (this.showFrameData) this.drawFrameData(definition, sourceX, sourceY);
   };
+
+  /** Move-mode frame data for the current selection, or null for non-attack slots. */
+  private moveData(): LabMoveFrameData | null {
+    return labMoveFrameData(
+      this.state.fighter,
+      this.state.animation,
+      this.state.moveFrame,
+      this.definition().frameCount,
+    );
+  }
+
+  private syncMoveFrame(): void {
+    const data = this.moveData();
+    if (data) this.state.frame = data.atlasFrame;
+  }
+
+  private timelineLength(): number {
+    return this.moveData()?.totalFrames ?? this.definition().frameCount;
+  }
+
+  private timelinePosition(): number {
+    return this.moveData() ? this.state.moveFrame : this.state.frame;
+  }
+
+  /**
+   * Draws the engine's hurtbox and active hitboxes over the sprite, anchored
+   * like the match renderer: the cell is centred on the fighter and its lowest
+   * opaque pixel sits on the fighter's feet (body centre + height / 2).
+   */
+  private drawFrameData(definition: RemoteAnimationDefinition, sourceX: number, sourceY: number): void {
+    const bounds = this.cellBounds(definition, sourceX, sourceY);
+    if (!bounds) return;
+    const fighter = getFighterDefinition(this.state.fighter);
+    const cellToCanvas = this.canvas.width / definition.cellSize;
+    const unit = cellToCanvas / spritePixelScale(this.state.fighter);
+    const feetY = (bounds.y + bounds.height) * cellToCanvas;
+    const origin = { x: this.canvas.width / 2, y: feetY - (fighter.size.height / 2) * unit };
+    const data = this.moveData();
+    const ctx = this.context;
+    ctx.save();
+    ctx.lineWidth = 2;
+    const profile = fighterHurtboxProfile(fighter.size, this.state.animation === "crouch" ? "crouch" : "idle");
+    const centerY = origin.y - profile.centerOffsetY * unit;
+    const radius = profile.radius * unit;
+    const segment = Math.max(0, profile.halfHeight - profile.radius) * unit;
+    const tint = data?.intangible ? "120, 220, 255" : data?.armored ? "190, 120, 255" : "255, 230, 80";
+    ctx.fillStyle = `rgba(${tint}, 0.18)`;
+    ctx.strokeStyle = `rgba(${tint}, 0.95)`;
+    ctx.beginPath();
+    ctx.arc(origin.x, centerY - segment, radius, Math.PI, 0);
+    ctx.lineTo(origin.x + radius, centerY + segment);
+    ctx.arc(origin.x, centerY + segment, radius, 0, Math.PI);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(origin.x - 3, origin.y - 3, 6, 6);
+    const colors: Record<ActiveMeleeHitbox["kind"], string> = {
+      sweet: "255, 60, 70",
+      normal: "255, 150, 40",
+      sour: "255, 220, 90",
+    };
+    for (const hitbox of data?.hitboxes ?? []) {
+      const color = colors[hitbox.kind];
+      ctx.fillStyle = `rgba(${color}, 0.35)`;
+      ctx.strokeStyle = `rgba(${color}, 0.95)`;
+      ctx.beginPath();
+      ctx.arc(
+        origin.x + hitbox.offset.x * this.state.facing * unit,
+        origin.y - hitbox.offset.y * unit,
+        hitbox.radius * unit,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  private cellBounds(definition: RemoteAnimationDefinition, sourceX: number, sourceY: number) {
+    const size = definition.cellSize;
+    const context = this.boundsCanvas.getContext("2d", { willReadFrequently: true });
+    if (!context) return null;
+    this.boundsCanvas.width = size;
+    this.boundsCanvas.height = size;
+    context.clearRect(0, 0, size, size);
+    context.drawImage(this.image, sourceX, sourceY, size, size, 0, 0, size, size);
+    try {
+      return findOpaquePixelBounds(context.getImageData(0, 0, size, size).data, size, size);
+    } catch {
+      return null;
+    }
+  }
 
   private updateLabels(): void {
     const definition = this.definition();
@@ -301,13 +484,24 @@ export class TestLabController {
     const play = this.root.querySelector<HTMLButtonElement>("[data-lab-play]");
     const slider = this.root.querySelector<HTMLInputElement>("[data-lab-field='frame']");
     if (name) name.textContent = `${fighterLabel(this.state.fighter)} • ${definition.label}`;
-    if (fps) fps.value = `${Math.round(definition.fps * this.state.speed)} FPS`;
-    if (frame) frame.value = `Frame ${this.state.frame + 1} / ${definition.frameCount}`;
-    if (state) {
-      state.value = `playing=${this.state.playing} · loop=${this.state.loop} · facing=${this.state.facing} · frame=${this.state.frame}`;
+    const data = this.moveData();
+    if (fps) {
+      fps.value = data
+        ? `${Math.round(60 * this.state.speed)} FPS · engine frames`
+        : `${Math.round(definition.fps * this.state.speed)} FPS`;
     }
-    if (play) play.textContent = this.state.playing ? "Pause" : "Lecture";
-    if (slider) slider.value = String(this.state.frame);
+    if (frame) {
+      frame.value = data
+        ? `Move frame ${data.moveFrame + 1} / ${data.totalFrames} · ${data.phase} · sprite ${data.atlasFrame + 1} / ${definition.frameCount}`
+        : `Frame ${this.state.frame + 1} / ${definition.frameCount}`;
+    }
+    if (state) {
+      state.value = data
+        ? `${data.move} · strike on move frame ${data.strikeFrame + 1}${data.keyFrame === null ? " · no key frame" : ` · key sprite ${data.keyFrame + 1}`}${data.intangible ? " · intangible" : ""}${data.armored ? " · super armor" : ""}`
+        : `playing=${this.state.playing} · loop=${this.state.loop} · facing=${this.state.facing} · frame=${this.state.frame}`;
+    }
+    if (play) play.textContent = this.state.playing ? "Pause" : "Play";
+    if (slider) slider.value = String(this.timelinePosition());
     this.updateItemPreview();
   }
 
@@ -388,18 +582,26 @@ export class TestLabController {
     if (!action) return;
     if (action === "toggle") {
       this.state.playing = !this.state.playing;
-      if (this.state.playing && !this.state.loop && this.state.frame >= this.definition().frameCount - 1) {
+      if (this.state.playing && !this.state.loop && this.timelinePosition() >= this.timelineLength() - 1) {
         this.elapsed = 0;
         this.state.frame = 0;
+        this.state.moveFrame = 0;
+        this.syncMoveFrame();
       }
     } else if (action === "previous" || action === "next") {
       this.state.playing = false;
       const direction = action === "next" ? 1 : -1;
-      this.state.frame = Math.max(
-        0,
-        Math.min(this.definition().frameCount - 1, this.state.frame + direction),
-      );
-      this.elapsed = this.state.frame / (this.definition().fps * this.state.speed);
+      if (this.moveData()) {
+        this.state.moveFrame = Math.max(0, Math.min(this.timelineLength() - 1, this.state.moveFrame + direction));
+        this.elapsed = this.state.moveFrame / (60 * this.state.speed);
+        this.syncMoveFrame();
+      } else {
+        this.state.frame = Math.max(
+          0,
+          Math.min(this.definition().frameCount - 1, this.state.frame + direction),
+        );
+        this.elapsed = this.state.frame / (this.definition().fps * this.state.speed);
+      }
       this.draw();
     } else if (action === "exercise-item") {
       this.exerciseSelectedItem();
@@ -469,8 +671,14 @@ export class TestLabController {
     const field = target.dataset.labField;
     if (field === "frame") {
       this.state.playing = false;
-      this.state.frame = Number(target.value);
-      this.elapsed = this.state.frame / (this.definition().fps * this.state.speed);
+      if (this.moveData()) {
+        this.state.moveFrame = Number(target.value);
+        this.elapsed = this.state.moveFrame / (60 * this.state.speed);
+        this.syncMoveFrame();
+      } else {
+        this.state.frame = Number(target.value);
+        this.elapsed = this.state.frame / (this.definition().fps * this.state.speed);
+      }
       this.draw();
       this.updateLabels();
     } else if (field === "speed") {
@@ -484,6 +692,12 @@ export class TestLabController {
   private syncOverlayToggle(target: HTMLInputElement): boolean {
     const overlay = target.dataset.labOverlayToggle;
     if (!overlay) return false;
+    if (overlay === "hit") {
+      // Frame data is drawn on the sprite canvas, aligned to the engine.
+      this.showFrameData = target.checked;
+      this.draw();
+      return true;
+    }
     const layer = this.root.querySelector<Element>(`[data-lab-overlay="${overlay}"]`);
     // `hidden` is not a reflected property on SVGElement, so assigning
     // `layer.hidden` leaves the collision SVG's attribute untouched.

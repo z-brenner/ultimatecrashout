@@ -239,6 +239,16 @@ Fighters without key frames keep the even stretch.
 
 ## Debugging moves
 
+For frame-by-frame work, open **Lab** from the main menu, pick a fighter and an
+attack animation (for example `forward_smash`), and tick **Hitboxes & frame
+data**. For attack slots the scrubber and ◀| |▶ step engine move frames instead
+of sprite frames, and each frame shows:
+
+- the sprite frame the game would display (with key frames applied);
+- the engine's own active hitboxes and the hurtbox, aligned like in a match
+  (blue while intangible, purple during super armor);
+- the phase (startup / active / recovery), the strike frame, and the key frame.
+
 During any match, press **F9** to toggle the collision overlay: yellow
 capsules are hurtboxes (blue while intangible, purple during super armor), the
 white square marks the
