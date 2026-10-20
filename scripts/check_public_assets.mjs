@@ -96,8 +96,6 @@ const required = [
   "public/assets/open/SHA256SUMS",
   "stages/verdant-grove/PROVENANCE.md",
   "stages/verdant-grove/SHA256SUMS",
-  "website/public/PROVENANCE.md",
-  "website/public/SHA256SUMS",
   "docs/media/PROVENANCE.md",
   "docs/media/SHA256SUMS",
 ];
@@ -127,7 +125,6 @@ const verifyChecksums = (directory, manifestPath, label) => {
 
 verifyChecksums("public/assets/audio/open", "public/assets/audio/open/SHA256SUMS", "audio");
 verifyChecksums("public/assets/open", "public/assets/open/SHA256SUMS", "original asset");
-verifyChecksums("website/public", "website/public/SHA256SUMS", "website launch media");
 verifyChecksums("docs/media", "docs/media/SHA256SUMS", "README launch media");
 
 if (errors.length > 0) {

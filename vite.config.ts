@@ -123,7 +123,6 @@ export default defineConfig(({ command }) => ({
       "**/node_modules/**",
       "**/dist/**",
       "**/.local-private/**",
-      "website/**",
       "e2e/**",
     ],
   },

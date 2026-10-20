@@ -77,8 +77,8 @@ Ordered by how much they constrain the goals.
 13. **Pre-existing layout nits at 1280×720**: the player-name input overlaps the
     fighter epithet; the home "Rules" tile clips its text.
 14. **Audio is shared** by every fighter; packs cannot declare voices or SFX.
-15. **`website/`** is the upstream project's marketing site (its domain, copy,
-    and Open Graph art). Decide: rebrand it or delete it.
+15. ~~`website/` was the upstream marketing site.~~ Removed; GitHub Pages
+    serves the game directly.
 16. **Tooling**: `npm audit fix`/`npm install vitest@…` crash in npm's resolver
     ("edgesOut"); a moderate vitest advisory remains until the lockfile is
     regenerated.

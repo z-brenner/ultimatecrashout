@@ -3,8 +3,8 @@
 The Ultimate Crashout code is released under MIT. Original project creations
 under `public/assets/open/` and `public/favicon.svg` are dedicated to the public
 domain under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
-The launch media listed in `website/public/PROVENANCE.md` and
-`docs/media/PROVENANCE.md` is also released under CC0 1.0.
+The launch media listed in `docs/media/PROVENANCE.md` is also released under
+CC0 1.0.
 Third-party assets retain the license listed in their manifest and in
 [`THIRD_PARTY_ASSETS.md`](THIRD_PARTY_ASSETS.md).
 
