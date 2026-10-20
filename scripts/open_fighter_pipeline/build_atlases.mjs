@@ -3,9 +3,12 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { holdContentBuildLock } from "../content_build_lock.mjs";
 import process from "node:process";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+// Lets a running dev server wait for the whole build before reloading.
+holdContentBuildLock(projectRoot, "3D atlas build");
 const manifestPath = resolve(process.env.OPEN_FIGHTER_MANIFEST ?? join(projectRoot, "scripts/open_fighter_pipeline/manifest.json"));
 const renderRoot = resolve(process.env.OPEN_FIGHTER_RENDER_ROOT ?? join(projectRoot, ".generated/open-fighters"));
 const publicRoot = resolve(process.env.OPEN_FIGHTER_PUBLIC_ROOT ?? join(projectRoot, "public/assets/characters/open"));

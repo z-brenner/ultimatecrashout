@@ -3,9 +3,12 @@ import { copyFile, mkdir, readFile, readdir, rename, rm, writeFile } from "node:
 import { spawnSync } from "node:child_process";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { holdContentBuildLock } from "../content_build_lock.mjs";
 import process from "node:process";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+// Lets a running dev server wait for the whole build before reloading.
+holdContentBuildLock(projectRoot, "2D atlas build");
 const manifestPath = resolve(process.env.OPEN_2D_MANIFEST ?? join(projectRoot, "scripts/open_fighter_pipeline/2d_manifest.json"));
 const renderRoot = resolve(process.env.OPEN_2D_RENDER_ROOT ?? join(projectRoot, ".generated/open-fighters-2d"));
 const publicRoot = resolve(process.env.OPEN_2D_PUBLIC_ROOT ?? join(projectRoot, "public/assets/characters/open"));

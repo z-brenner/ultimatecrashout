@@ -4,8 +4,11 @@ import { spawnSync } from "node:child_process";
 import { access, readdir, rename, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { holdContentBuildLock } from "./content_build_lock.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// Lets a running dev server wait for the whole build before reloading.
+holdContentBuildLock(root, "UI thumbnail build");
 const requestedFighters = process.argv.slice(2).filter((value) => !value.startsWith("--"));
 const fighterRoot = join(root, "public/assets/ui/fighters");
 const stageRoot = join(root, "stages");

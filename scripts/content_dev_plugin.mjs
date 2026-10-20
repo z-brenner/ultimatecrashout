@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join, relative, sep } from "node:path";
-import { CONTENT_BUILD_LOCK, readContentBuildLock } from "./content_build_lock.mjs";
+import { CONTENT_BUILD_LOCKS, readContentBuildLock } from "./content_build_lock.mjs";
 
 /**
  * Open fighter runtime data (2D animation metadata and per-fighter
@@ -36,7 +36,8 @@ const readJson = (path) => {
   try {
     return JSON.parse(readFileSync(path, "utf8"));
   } catch (error) {
-    throw new Error(`Cannot read ${path}: ${error instanceof Error ? error.message : error}`);
+    throw new Error(`Cannot read ${path}: ${error instanceof Error ? error.message : error}. ` +
+      "If a content build is running, reload the page when it finishes.");
   }
 };
 
@@ -86,7 +87,7 @@ const repositoryPath = (root, file) => {
 export const classifyContentChange = (root, file) => {
   const path = repositoryPath(root, file);
   if (!path) return null;
-  if (path === CONTENT_BUILD_LOCK) return { kind: "lock" };
+  if (path.startsWith(`${CONTENT_BUILD_LOCKS}/`)) return { kind: "lock" };
   if (SCRATCH_FILE.test(basename(path))) return null;
   // Every pack input (JSON, sprite strips, stage art, pipeline config) feeds
   // the sync's validation; the sync itself never writes inside these folders.
@@ -123,9 +124,9 @@ export const openFighterRuntimePlugin = ({ root }) => ({
 /**
  * Dev-server half: saving anything in a fighter or stage pack re-runs the
  * (fast) registry sync; regenerated registries, manifests, atlases, and
- * thumbnails reload the page once. While `fighter:build -- <id>` or
- * `stage:build -- <id>` holds the build lock, everything waits for the build
- * to finish, then syncs and reloads once. Invalid packs show the validator's
+ * thumbnails reload the page once. While a content build holds a build lock
+ * (scripts/content_build_lock.mjs), everything waits for it to finish, then
+ * syncs and reloads once. Invalid packs show the validator's
  * message in Vite's error overlay until they are fixed, across reloads.
  */
 export const contentWatchPlugin = ({
@@ -220,7 +221,7 @@ export const contentWatchPlugin = ({
         }
         if (queue.pending) {
           queue.pending = false;
-          await sync(packs);
+          schedule(packs);
         }
       };
 
@@ -242,9 +243,13 @@ export const contentWatchPlugin = ({
         const lock = readContentBuildLock(root);
         if (lock && !building) {
           building = true;
-          logger.info(`[content] waiting for ${lock.label ?? "content build"}`, { timestamp: true });
+          logger.info(
+            `[content] waiting for ${lock.label ?? "content build"} (pid ${lock.pid}) before syncing or reloading`,
+            { timestamp: true },
+          );
           // A killed build leaves its lock behind; notice when its process is gone.
           lockPoll = setInterval(checkLock, lockPollMs);
+          lockPoll.unref?.();
         } else if (!lock && building) {
           building = false;
           clearInterval(lockPoll);
@@ -260,7 +265,9 @@ export const contentWatchPlugin = ({
       // A reload reconnects the tab: show a still-invalid pack again, to that tab only.
       server.ws.on("connection", (socket) => {
         const payload = failurePayload();
-        if (payload) socket.send(JSON.stringify(payload));
+        if (!payload) return;
+        if (typeof socket?.send === "function") socket.send(JSON.stringify(payload));
+        else server.ws.send(payload);
       });
       server.watcher.on("all", (event, file) => {
         if (event !== "add" && event !== "change" && event !== "unlink") return;

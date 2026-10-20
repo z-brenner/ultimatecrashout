@@ -11,7 +11,7 @@ import {
 } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { withContentBuildLock } from "./content_build_lock.mjs";
+import { holdContentBuildLock } from "./content_build_lock.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packRoot = resolve(process.env.FIGHTER_PACKS_ROOT ?? join(projectRoot, "fighters"));
@@ -653,19 +653,18 @@ const scaffold = async () => {
 };
 
 const build = async () => {
+  const requestedId = args.find((argument) => !argument.startsWith("--"));
+  // A targeted build rewrites atlases and thumbnails: hold the lock throughout
+  // so a running dev server reloads once, at the end. A plain sync is instant.
+  if (requestedId) holdContentBuildLock(projectRoot, `fighter:build ${requestedId}`);
   const state = await loadPacks();
   await syncGenerated(state);
   const ready = state.loaded.filter(({ pack }) => pack.status === "ready");
   const drafts = state.loaded.length - ready.length;
   console.log(`${ready.length} fighter pack(s) synchronized${drafts ? `; ${drafts} draft(s) skipped` : ""}.`);
-  const requestedId = args.find((argument) => !argument.startsWith("--"));
   if (!requestedId) return;
   const selected = ready.find(({ pack }) => pack.id === requestedId);
   assert(selected, `Ready fighter pack not found: ${requestedId}`);
-  await withContentBuildLock(projectRoot, `fighter:build ${requestedId}`, () => buildFighterAssets(selected, requestedId));
-};
-
-const buildFighterAssets = (selected, requestedId) => {
   if (selected.pack.kind === "3d") {
     run("zsh", ["scripts/open_fighter_pipeline/render_all.sh"], {
       env: { OPEN_FIGHTERS: requestedId },

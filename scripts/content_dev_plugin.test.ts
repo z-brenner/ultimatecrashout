@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,7 +12,21 @@ import {
   openFighterRuntimePlugin,
   readOpenFighterRuntime,
 } from "./content_dev_plugin.mjs";
-import { CONTENT_BUILD_LOCK, readContentBuildLock, withContentBuildLock } from "./content_build_lock.mjs";
+import {
+  CONTENT_BUILD_LOCKS,
+  holdContentBuildLock,
+  readContentBuildLock,
+  withContentBuildLock,
+} from "./content_build_lock.mjs";
+
+/** Writes a lock file as another build process would. */
+const writeLock = (buildRoot: string, pid: number, startedAt = new Date().toISOString()) => {
+  mkdirSync(join(buildRoot, CONTENT_BUILD_LOCKS), { recursive: true });
+  const path = join(CONTENT_BUILD_LOCKS, `${pid}.json`);
+  writeFileSync(join(buildRoot, path), JSON.stringify({ pid, label: "fighter:build buckle", startedAt }));
+  return path;
+};
+const deadPid = () => spawnSync(process.execPath, ["-e", ""]).pid!;
 import { OPEN_2D_FIGHTER_IDS, OPEN_3D_FIGHTER_IDS } from "../src/game/generated/openFighterRegistry";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -56,7 +70,7 @@ describe("content change classification", () => {
     ["public/assets/ui/fighters/buckle/select/00.png", { kind: "reload" }],
     ["public/assets/ui/fighters/buckle/select/00.thumb.webp", { kind: "reload" }],
     ["public/assets/characters/open/buckle/00/jab.webp", { kind: "reload" }],
-    [".content-build.lock", { kind: "lock" }],
+    [".content-builds/4242.json", { kind: "lock" }],
     ["public/assets/characters/open/2d-animation-metadata.json.tmp-123", null],
     ["stages/crash-course/assets/preview.thumb.webp.tmp-77.webp", null],
     ["fighters/buckle/.fighter.json.swp", null],
@@ -147,8 +161,8 @@ describe("content watch plugin", () => {
     try {
       const runSync = vi.fn(async () => ({ ok: true, output: "" }));
       const { emit, sent } = startServer(runSync, buildRoot);
-      writeFileSync(join(buildRoot, CONTENT_BUILD_LOCK), JSON.stringify({ pid: process.pid, label: "fighter:build buckle" }));
-      emit("add", CONTENT_BUILD_LOCK);
+      const lock = writeLock(buildRoot, process.pid);
+      emit("add", lock);
       emit("unlink", "public/assets/characters/open/buckle/00/jab.webp");
       emit("add", "public/assets/characters/open/buckle/00/jab.webp");
       emit("change", "public/assets/characters/open/2d-animation-metadata.json");
@@ -158,8 +172,8 @@ describe("content watch plugin", () => {
       expect(sent()).toEqual([]);
       expect(runSync).not.toHaveBeenCalled();
 
-      rmSync(join(buildRoot, CONTENT_BUILD_LOCK));
-      emit("unlink", CONTENT_BUILD_LOCK);
+      rmSync(join(buildRoot, lock));
+      emit("unlink", lock);
       await settle();
       expect(runSync).toHaveBeenCalledTimes(1);
       expect(runSync).toHaveBeenCalledWith(buildRoot, "scripts/stage_packs.mjs");
@@ -173,14 +187,14 @@ describe("content watch plugin", () => {
     const buildRoot = mkdtempSync(join(tmpdir(), "uc-content-lock-"));
     try {
       const { emit, sent } = startServer(vi.fn(), buildRoot);
-      writeFileSync(join(buildRoot, CONTENT_BUILD_LOCK), JSON.stringify({ pid: process.pid, label: "x" }));
-      emit("add", CONTENT_BUILD_LOCK);
+      const lock = writeLock(buildRoot, process.pid);
+      emit("add", lock);
       emit("change", "public/assets/characters/open/2d-animation-metadata.json");
       await settle();
       expect(sent()).toEqual([]);
-      // The owner dies without removing the lock: the poll releases it.
-      const dead = spawnSync(process.execPath, ["-e", ""]).pid;
-      writeFileSync(join(buildRoot, CONTENT_BUILD_LOCK), JSON.stringify({ pid: dead, label: "x" }));
+      // The owner dies without removing its lock: the poll releases it.
+      rmSync(join(buildRoot, lock));
+      writeLock(buildRoot, deadPid());
       await settle();
       expect(sent()).toEqual([{ type: "full-reload" }]);
     } finally {
@@ -263,19 +277,45 @@ describe("content watch plugin", () => {
 });
 
 describe("content build lock", () => {
+  const roots: string[] = [];
+  const buildRoot = () => {
+    const directory = mkdtempSync(join(tmpdir(), "uc-content-lock-"));
+    roots.push(directory);
+    return directory;
+  };
+  afterEach(() => {
+    for (const directory of roots.splice(0)) rmSync(directory, { recursive: true, force: true });
+  });
+
   it("is held for the build and released even when it fails", async () => {
-    const buildRoot = mkdtempSync(join(tmpdir(), "uc-content-lock-"));
-    try {
-      await withContentBuildLock(buildRoot, "stage:build demo", () => {
-        expect(readContentBuildLock(buildRoot)).toMatchObject({ pid: process.pid, label: "stage:build demo" });
-      });
-      expect(existsSync(join(buildRoot, CONTENT_BUILD_LOCK))).toBe(false);
-      await expect(withContentBuildLock(buildRoot, "x", () => {
-        throw new Error("cwebp failed");
-      })).rejects.toThrow("cwebp failed");
-      expect(readContentBuildLock(buildRoot)).toBeNull();
-    } finally {
-      rmSync(buildRoot, { recursive: true, force: true });
-    }
+    const directory = buildRoot();
+    await withContentBuildLock(directory, "stage:build demo", () => {
+      expect(readContentBuildLock(directory)).toMatchObject({ pid: process.pid, label: "stage:build demo" });
+    });
+    expect(readdirSync(join(directory, CONTENT_BUILD_LOCKS))).toEqual([]);
+    await expect(withContentBuildLock(directory, "x", () => {
+      throw new Error("cwebp failed");
+    })).rejects.toThrow("cwebp failed");
+    expect(readContentBuildLock(directory)).toBeNull();
+  });
+
+  it("keeps another build's lock when one build finishes", () => {
+    const directory = buildRoot();
+    writeLock(directory, process.ppid);
+    const release = holdContentBuildLock(directory, "stage:build b");
+    release();
+    expect(readContentBuildLock(directory)).toMatchObject({ pid: process.ppid });
+  });
+
+  it("ignores locks from dead processes, too old, or half-written", () => {
+    const directory = buildRoot();
+    expect(readContentBuildLock(directory)).toBeNull();
+    writeLock(directory, deadPid());
+    expect(readContentBuildLock(directory)).toBeNull();
+    writeLock(directory, process.pid, new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString());
+    expect(readContentBuildLock(directory)).toBeNull();
+    writeFileSync(join(directory, CONTENT_BUILD_LOCKS, "99.json"), "{\"pid\":");
+    expect(readContentBuildLock(directory)).toBeNull();
+    expect(existsSync(join(directory, CONTENT_BUILD_LOCKS))).toBe(true);
   });
 });

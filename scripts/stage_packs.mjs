@@ -13,7 +13,7 @@ import {
 } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { withContentBuildLock } from "./content_build_lock.mjs";
+import { holdContentBuildLock } from "./content_build_lock.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packRoot = resolve(process.env.STAGE_PACKS_ROOT ?? join(projectRoot, "stages"));
@@ -419,7 +419,9 @@ const refreshPackAssets = async (id) => {
 const build = async () => {
   const requestedId = args.find((argument) => !argument.startsWith("--"));
   if (requestedId) {
-    await withContentBuildLock(projectRoot, `stage:build ${requestedId}`, () => refreshPackAssets(requestedId));
+    // Released on exit, after the registry below is written too.
+    holdContentBuildLock(projectRoot, `stage:build ${requestedId}`);
+    await refreshPackAssets(requestedId);
   }
   const loaded = await loadPacks();
   await writeAtomic(registryOut, generatedRegistry(loaded));
