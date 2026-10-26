@@ -7,7 +7,7 @@
 /** Below this saturation a pixel is neutral (outlines, whites, greys) and never recoloured. */
 export const MIN_SWAP_SATURATION = 0.18;
 /** Below this value a pixel is near-black shading and never recoloured. */
-const MIN_SWAP_VALUE = 0.08;
+export const MIN_SWAP_VALUE = 0.08;
 export const DEFAULT_SWAP_TOLERANCE = 24;
 export const MAX_SKIN_SWAPS = 6;
 
@@ -53,7 +53,7 @@ export const hsvToRgb = (hue, saturation, value) => {
 };
 
 /** Signed shortest hue difference, in (-180, 180]. */
-const hueDelta = (from, to) => {
+export const hueDelta = (from, to) => {
   const delta = (((to - from) % 360) + 540) % 360 - 180;
   return delta === -180 ? 180 : delta;
 };
@@ -75,6 +75,10 @@ export const compileSwaps = (swaps) => swaps.map(({ from, to, tolerance = DEFAUL
     saturationScale: toSaturation / Math.max(0.01, fromSaturation),
     valueScale: toValue / Math.max(0.01, fromValue),
     tolerance,
+    // The swap fades in above the neutral threshold over this width, and is
+    // at full strength by the source colour's own saturation, so a muted
+    // source family (steel, camo) is recoloured fully, not partly.
+    neutralFade: Math.min(MIN_SWAP_SATURATION, Math.max(0.04, fromSaturation - MIN_SWAP_SATURATION)),
   };
 });
 
@@ -99,7 +103,7 @@ const swapColor = (r, g, b, compiled) => {
   const edge = clamp01((best.tolerance - bestDistance) / (best.tolerance * 0.5));
   const weight = edge * edge * (3 - 2 * edge);
   // Fade the swap out across the neutral threshold too.
-  const neutral = clamp01((saturation - MIN_SWAP_SATURATION) / MIN_SWAP_SATURATION);
+  const neutral = clamp01((saturation - MIN_SWAP_SATURATION) / best.neutralFade);
   const strength = weight * neutral;
   if (strength <= 0) return null;
   const [tr, tg, tb] = hsvToRgb(

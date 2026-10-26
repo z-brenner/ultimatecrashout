@@ -10,7 +10,7 @@ import {
   type RemoteAnimationSlot,
 } from "../game/characterAssets";
 import { FIGHTER_VISUAL_MANIFESTS } from "../game/fighterVisuals";
-import { atlasImageUrl } from "../game/skinRecolor";
+import { atlasImageUrl, releaseRecoloredImages } from "../game/skinRecolor";
 import { FIGHTER_SKINS } from "../game/content";
 import type { FighterId, InputFrame, SkinId, StageId } from "../game/contracts";
 import {
@@ -203,6 +203,8 @@ export class TestLabController {
     if (this.destroyed) return;
     this.destroyed = true;
     cancelAnimationFrame(this.raf);
+    // Browsing skins recolours many atlases; free them with the Lab.
+    releaseRecoloredImages([]);
     this.image.removeEventListener("load", this.draw);
     this.root.removeEventListener("click", this.handleClick);
     this.root.removeEventListener("change", this.handleChange);

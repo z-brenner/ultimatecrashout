@@ -7,6 +7,8 @@ export interface SkinSwap {
   tolerance?: number;
 }
 export const MIN_SWAP_SATURATION: number;
+export const MIN_SWAP_VALUE: number;
+export function hueDelta(from: number, to: number): number;
 export const DEFAULT_SWAP_TOLERANCE: number;
 export const MAX_SKIN_SWAPS: number;
 export function parseHexColor(hex: string | undefined): [number, number, number] | null;

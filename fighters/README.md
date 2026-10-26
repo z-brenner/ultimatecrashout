@@ -282,7 +282,7 @@ and proposes three skins:
 ```sh
 npm run fighter:skins -- my-fighter            # colour families + suggestion
 npm run fighter:skins -- my-fighter --preview  # .generated/skins/my-fighter.png
-npm run fighter:skins -- my-fighter --write    # store the suggestion in fighter.json
+npm run fighter:skins -- my-fighter --write    # store it in fighter.json (--replace to overwrite)
 ```
 
 Then tune names, colours, and tolerances by hand. With `npm run dev`

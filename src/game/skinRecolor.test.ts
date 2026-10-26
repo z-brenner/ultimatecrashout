@@ -70,22 +70,45 @@ describe("skin recolouring", () => {
     expect(readyRecoloredImageUrl(url, [{ from: "#f6c41a", to: "#2a5cdc" }])).toBeNull();
   });
 
-  it("falls back to the original art, and retries, when recolouring fails", async () => {
-    const { atlasImageUrl, recoloredImageUrl } = await loadModule();
+  it("falls back to the original art when recolouring fails, and remembers the failure", async () => {
+    const { atlasImageUrl, recoloredImageUrl, recolorFailed } = await loadModule();
     const mediaUrl = "/assets/characters/open/buckle/00/jab.webp?v=1#skin-02";
     failing.add("/assets/characters/open/buckle/00/jab.webp?v=1");
     await expect(atlasImageUrl({ mediaUrl, palette: SWAPS })).resolves.toBe("/assets/characters/open/buckle/00/jab.webp?v=1");
+    expect(recolorFailed(mediaUrl, SWAPS)).toBe(true);
+    // Not retried on every render: the UI settles on the original portrait.
     failing.clear();
-    await expect(recoloredImageUrl(mediaUrl, SWAPS)).resolves.toBe("blob:skin-1");
+    const before = requested.length;
+    await expect(recoloredImageUrl(mediaUrl, SWAPS)).rejects.toThrow();
+    expect(requested).toHaveLength(before);
     await expect(atlasImageUrl({ mediaUrl: "/plain.webp" })).resolves.toBe("/plain.webp");
   });
 
-  it("revokes the oldest blob URLs once the cache is full", async () => {
-    const { recoloredImageUrl, readyRecoloredImageUrl } = await loadModule();
-    const urls = Array.from({ length: 161 }, (_, index) => `/atlas-${index}.webp`);
-    for (const url of urls) await recoloredImageUrl(url, SWAPS);
-    expect(revoked).toEqual(["blob:skin-1"]);
-    expect(readyRecoloredImageUrl(urls[0]!, SWAPS)).toBeNull();
-    expect(readyRecoloredImageUrl(urls[160]!, SWAPS)).toBe("blob:skin-161");
+  it("frees match atlases that the next match does not use, but keeps portraits", async () => {
+    const { recoloredImageUrl, readyRecoloredImageUrl, releaseRecoloredImages } = await loadModule();
+    const kept = await recoloredImageUrl("/atlas-kept.webp", SWAPS, "match");
+    await recoloredImageUrl("/atlas-dropped.webp", SWAPS, "match");
+    const portrait = await recoloredImageUrl("/portrait.png", SWAPS, "ui");
+    releaseRecoloredImages([{ url: "/atlas-kept.webp#skin-01", swaps: SWAPS }]);
+    expect(revoked).toEqual(["blob:skin-2"]);
+    expect(readyRecoloredImageUrl("/atlas-kept.webp", SWAPS)).toBe(kept);
+    expect(readyRecoloredImageUrl("/atlas-dropped.webp", SWAPS)).toBeNull();
+    expect(readyRecoloredImageUrl("/portrait.png", SWAPS)).toBe(portrait);
+  });
+
+  it("never revokes a recolour released while still in flight", async () => {
+    const { recoloredImageUrl, releaseRecoloredImages } = await loadModule();
+    const job = recoloredImageUrl("/atlas-slow.webp", SWAPS, "match");
+    releaseRecoloredImages([]);
+    await expect(job).resolves.toBe("blob:skin-1");
+    expect(revoked).toEqual([]);
+  });
+
+  it("gives each recolour a stable DOM-safe token", async () => {
+    const { recolorToken } = await loadModule();
+    const token = recolorToken("/select/00.png", SWAPS);
+    expect(token).toMatch(/^skin-[0-9a-z]+$/);
+    expect(recolorToken("/select/00.png#skin-01", SWAPS)).toBe(token);
+    expect(recolorToken("/select/00.png", [{ from: "#f6c41a", to: "#2a5cdc" }])).not.toBe(token);
   });
 });

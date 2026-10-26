@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  hueDelta,
   hsvToRgb,
   isSwappableColor,
   parseHexColor,
@@ -19,6 +20,12 @@ describe("skin palette", () => {
       back.forEach((channel, index) => expect(Math.abs(channel - rgb[index]!)).toBeLessThanOrEqual(1));
     }
     expect(parseHexColor("red")).toBeNull();
+  });
+
+  it("measures signed hue differences across 0°", () => {
+    expect(hueDelta(350, 10)).toBe(20);
+    expect(hueDelta(10, 350)).toBe(-20);
+    expect(hueDelta(0, 180)).toBe(180);
   });
 
   it("only accepts saturated, visible source colours", () => {
@@ -71,6 +78,13 @@ describe("skin palette", () => {
     expect(moved[1]).toBeGreaterThan(moved[2]!);
     expect(moved[2]).toBeGreaterThan(0);
     expect(moved[3]).toBe(0);
+  });
+
+  it("fully recolours a muted source family, not just its most saturated pixels", () => {
+    // George's camo green: saturation 0.26, just above the neutral threshold.
+    const data = pixels([51, 69, 53, 255]);
+    recolorPixels(data, [{ from: "#334535", to: "#8a7444" }]);
+    expect(at(data, 0).slice(0, 3)).toEqual(parseHexColor("#8a7444"));
   });
 
   it("applies the closest of several swaps", () => {

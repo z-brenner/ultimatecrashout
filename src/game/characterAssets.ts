@@ -17,7 +17,7 @@ import { OPEN_ANIMATION_METADATA } from "./openAnimationMetadata";
 import { FIGHTER_IDS, getFighterDefinition, type AttackDefinition, type MoveName } from "./roster";
 import { publicAsset } from "./publicAsset";
 import type { SkinSwap } from "./skinPalette.mjs";
-import { atlasImageUrl } from "./skinRecolor";
+import { atlasImageUrl, releaseRecoloredImages } from "./skinRecolor";
 
 const ALL_SKIN_IDS = ["00", "01", "02", "03"] as const satisfies readonly SkinId[];
 const DEFAULT_ANIMATION_CELL_SIZE = 192;
@@ -613,6 +613,9 @@ export class CharacterSpriteLibrary {
     for (const fighterSkin of this.primedFighterSkins) {
       if (!selected.has(fighterSkin)) this.primedFighterSkins.delete(fighterSkin);
     }
+    // Recoloured atlases of skins that left the roster are freed.
+    releaseRecoloredImages(resolvedSelections.flatMap(({ animations }) =>
+      Object.values(animations).flatMap(({ mediaUrl, palette }) => palette ? [{ url: mediaUrl, swaps: palette }] : [])));
     this.activeAtlasImages.clear();
     this.lastResolvedAtlasFrames.clear();
   }

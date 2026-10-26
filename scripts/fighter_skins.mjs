@@ -4,7 +4,8 @@
  *
  *   npm run fighter:skins -- <id>             print colour families and a suggested visual.skins
  *   npm run fighter:skins -- <id> --preview   also write .generated/skins/<id>.png (original + each skin)
- *   npm run fighter:skins -- <id> --write     store the suggestion (or the current skins) in fighter.json
+ *   npm run fighter:skins -- <id> --write     store the suggestion in fighter.json (only if it has no skins yet)
+ *   npm run fighter:skins -- <id> --replace   store the suggestion, replacing existing skins
  *
  * Suggestions are a starting point: review the preview (or the Lab, with
  * `npm run dev`) and adjust names, colours, and tolerances by hand.
@@ -15,6 +16,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   MIN_SWAP_SATURATION,
+  MIN_SWAP_VALUE,
+  hueDelta,
   hsvToRgb,
   parseHexColor,
   recolorPixels,
@@ -33,6 +36,7 @@ if (!id) fail("Usage: npm run fighter:skins -- <fighter-id> [--preview] [--write
 const packPath = join(root, "fighters", id, "fighter.json");
 if (!existsSync(packPath)) fail(`Fighter pack not found: fighters/${id}/fighter.json`);
 const pack = JSON.parse(readFileSync(packPath, "utf8"));
+if (pack.visual === null || typeof pack.visual !== "object") fail(`${id}: fighter.json has no visual block`);
 
 /** Slots sampled for colour statistics: neutral poses show the whole body. */
 const SAMPLE_SLOTS = ["idle", "run", "jab", "victory"];
@@ -49,10 +53,7 @@ const PALETTE = [
 ];
 
 const hex = (rgb) => `#${rgb.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
-const hueDistance = (left, right) => {
-  const delta = Math.abs(left - right) % 360;
-  return delta > 180 ? 360 - delta : delta;
-};
+const hueDistance = (left, right) => Math.abs(hueDelta(left, right));
 
 const decodeAtlas = (slot) => {
   const path = join(root, "public/assets/characters/open", id, "00", `${slot}.webp`);
@@ -77,7 +78,7 @@ for (const { data } of atlases) {
     if (data[index + 3] < 128) continue;
     opaque += 1;
     const [hue, saturation, value] = rgbToHsv(data[index], data[index + 1], data[index + 2]);
-    if (saturation < MIN_SWAP_SATURATION || value < 0.08) continue;
+    if (saturation < MIN_SWAP_SATURATION || value < MIN_SWAP_VALUE) continue;
     const bin = Math.round(hue / (360 / BINS)) % BINS;
     const entry = bins.get(bin) ?? { count: 0, x: 0, y: 0, saturation: 0, value: 0 };
     entry.count += 1;
@@ -216,9 +217,12 @@ if (args.includes("--preview") && skins) {
   console.log(`\nPreview (original, then ${skins.map(({ name }) => name).join(", ")}): ${output}`);
 }
 
-if (args.includes("--write")) {
-  if (!suggestion && !pack.visual.skins) fail(`${id}: nothing to write`);
-  pack.visual.skins = pack.visual.skins ?? suggestion;
+if (args.includes("--write") || args.includes("--replace")) {
+  if (!suggestion) fail(`${id}: no suggestion to write`);
+  if (pack.visual.skins && !args.includes("--replace")) {
+    fail(`${id}: fighter.json already has visual.skins; use --replace to overwrite them`);
+  }
+  pack.visual.skins = suggestion;
   writeFileSync(packPath, `${JSON.stringify(pack, null, 2)}\n`);
   console.log(`\nWrote visual.skins to fighters/${id}/fighter.json; run npm run fighter:build to validate.`);
 }

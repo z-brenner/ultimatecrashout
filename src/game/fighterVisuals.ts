@@ -42,21 +42,21 @@ const OPEN_FIGHTER_RUNTIME_STATUS = OPEN_FIGHTER_RUNTIME_DATA as Readonly<
   Partial<Record<OpenFighterId, FighterRuntimeStatus>>
 >;
 
-const declaredSkins = (pack: (typeof OPEN_FIGHTER_PACKS)[number]): readonly FighterSkinPalette[] =>
+/** Pack skins keyed 01, 02, 03 in declaration order. */
+const skinPalettes = (pack: (typeof OPEN_FIGHTER_PACKS)[number]): Partial<Record<SkinId, FighterSkinPalette>> => {
   // Optional, so absent from most packs' literal types.
-  (pack.visual as { skins?: readonly FighterSkinPalette[] }).skins ?? [];
-
-const skinPalettes = (skins: readonly FighterSkinPalette[]): Partial<Record<SkinId, FighterSkinPalette>> =>
-  Object.fromEntries(skins.slice(0, ALTERNATE_SKIN_IDS.length).map((skin, index) => [ALTERNATE_SKIN_IDS[index], skin]));
+  const skins = (pack.visual as { skins?: readonly FighterSkinPalette[] }).skins ?? [];
+  return Object.fromEntries(ALTERNATE_SKIN_IDS.flatMap((id, index) => skins[index] ? [[id, skins[index]]] : []));
+};
 
 export const FIGHTER_VISUAL_MANIFESTS = Object.fromEntries(
-  OPEN_FIGHTER_PACKS.map((pack) => [pack.id, {
+  OPEN_FIGHTER_PACKS.map((pack) => [pack, skinPalettes(pack)] as const).map(([pack, palettes]) => [pack.id, {
     fighter: pack.id,
     sourceKind: pack.kind === "3d" ? "open-3d" : "open-2d",
     atlasRoot: publicAsset(`assets/characters/open/${pack.id}`),
     portraitRoot: publicAsset(`assets/ui/fighters/${pack.id}/select`),
     sourceFacing: pack.visual.sourceFacing,
-    availableSkins: ["00", ...ALTERNATE_SKIN_IDS.slice(0, declaredSkins(pack).length)],
+    availableSkins: ["00", ...ALTERNATE_SKIN_IDS.filter((id) => palettes[id])],
     attribution: pack.visual.attribution,
     sourcePage: pack.visual.sourcePage,
     license: pack.visual.license,
@@ -64,7 +64,7 @@ export const FIGHTER_VISUAL_MANIFESTS = Object.fromEntries(
     keyFrames: (pack.visual as {
       keyFrames?: Readonly<Partial<Record<RemoteAnimationSlot, number>>>;
     }).keyFrames ?? {},
-    skinPalettes: skinPalettes(declaredSkins(pack)),
+    skinPalettes: palettes,
   } satisfies FighterVisualManifest]),
 ) as unknown as Readonly<Record<FighterId, FighterVisualManifest>>;
 

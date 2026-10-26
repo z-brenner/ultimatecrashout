@@ -13,7 +13,12 @@ import type {
 } from "../game/contracts";
 import { isOpenFighterId } from "../game/contracts";
 import type { SkinSwap } from "../game/skinPalette.mjs";
-import { readyRecoloredImageUrl, recoloredImageUrl } from "../game/skinRecolor";
+import {
+  readyRecoloredImageUrl,
+  recolorFailed,
+  recolorToken,
+  recoloredImageUrl,
+} from "../game/skinRecolor";
 import {
   getFighterSkin,
   getFighterSkins,
@@ -306,24 +311,29 @@ function keyLabel(code: string, layoutLabels?: ReadonlyMap<string, string>): str
   return layoutLabel ? normalizeKeyLabel(layoutLabel) : formatKeyCode(code, false);
 }
 
+/** Portrait recolours with a settle callback already attached. */
+const portraitRequests = new Set<string>();
+
 /**
- * Starts recolouring a skin portrait and returns the key its <img> carries
+ * Starts recolouring a skin portrait and returns the token its <img> carries
  * until the recoloured image is swapped in (hidden meanwhile, so the original
- * colours never flash). Templates re-render often, so finished portraits are
- * served straight from the recolour cache.
+ * colours never flash). Templates re-render often: finished portraits come
+ * straight from the recolour cache, and each recolour settles its images once.
  */
 function requestSkinPortrait(baseUrl: string, swaps: readonly SkinSwap[]): string {
-  const key = `${baseUrl}|${swaps.map(({ from, to, tolerance }) => `${from}${to}${tolerance ?? ""}`).join(",")}`
-    .replace(/[^a-zA-Z0-9]+/g, "-");
+  const token = recolorToken(baseUrl, swaps);
+  if (portraitRequests.has(token)) return token;
+  portraitRequests.add(token);
   const settle = (url: string): void => {
+    portraitRequests.delete(token);
     if (typeof document === "undefined") return;
-    for (const image of document.querySelectorAll<HTMLImageElement>(`img[data-skin-portrait="${key}"]`)) {
+    for (const image of document.querySelectorAll<HTMLImageElement>(`img[data-skin-portrait="${token}"]`)) {
       image.src = url;
       image.removeAttribute("data-skin-portrait");
     }
   };
   recoloredImageUrl(baseUrl, swaps).then(settle, () => settle(baseUrl));
-  return key;
+  return token;
 }
 
 function portraitMarkup(
@@ -338,10 +348,9 @@ function portraitMarkup(
   const baseUrl = thumbnail
     ? portraitUrl.replace(/\.png$/, ".thumb.webp")
     : portraitUrl;
-  const recolored = selectedSkin.swaps.length > 0
-    ? readyRecoloredImageUrl(baseUrl, selectedSkin.swaps)
-    : null;
-  const pendingKey = selectedSkin.swaps.length > 0 && !recolored
+  const recolors = selectedSkin.swaps.length > 0 && !recolorFailed(baseUrl, selectedSkin.swaps);
+  const recolored = recolors ? readyRecoloredImageUrl(baseUrl, selectedSkin.swaps) : null;
+  const pendingKey = recolors && !recolored
     ? requestSkinPortrait(baseUrl, selectedSkin.swaps)
     : null;
   const imageUrl = recolored ?? baseUrl;
@@ -420,6 +429,7 @@ export class UIController extends EventTarget {
     this.root = root;
     this.callbacks = callbacks;
     this.selectedFighters = options.initialFighters ?? DEFAULT_FIGHTERS;
+    this.avoidMirrorSkin(1);
 
     const suppliedBindings = options.settings?.bindings;
     this.settings = {
@@ -572,8 +582,6 @@ export class UIController extends EventTarget {
   }
 
   getMatchConfig(): MatchConfig {
-    // Safety net for selections made outside the select screen's handlers.
-    this.avoidMirrorSkin(1);
     return {
       players: [
         {
