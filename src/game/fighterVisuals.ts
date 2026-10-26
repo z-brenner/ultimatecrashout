@@ -53,21 +53,21 @@ export const FIGHTER_VISUAL_MANIFESTS = Object.fromEntries(
   OPEN_FIGHTER_PACKS.map((pack) => {
     const palettes = skinPalettes(pack);
     return [pack.id, {
-    fighter: pack.id,
-    sourceKind: pack.kind === "3d" ? "open-3d" : "open-2d",
-    atlasRoot: publicAsset(`assets/characters/open/${pack.id}`),
-    portraitRoot: publicAsset(`assets/ui/fighters/${pack.id}/select`),
-    sourceFacing: pack.visual.sourceFacing,
-    availableSkins: ["00", ...ALTERNATE_SKIN_IDS.filter((id) => palettes[id])],
-    attribution: pack.visual.attribution,
-    sourcePage: pack.visual.sourcePage,
-    license: pack.visual.license,
-    // Optional, so absent from most packs' literal types.
-    keyFrames: (pack.visual as {
-      keyFrames?: Readonly<Partial<Record<RemoteAnimationSlot, number>>>;
-    }).keyFrames ?? {},
-    skinPalettes: palettes,
-  } satisfies FighterVisualManifest];
+      fighter: pack.id,
+      sourceKind: pack.kind === "3d" ? "open-3d" : "open-2d",
+      atlasRoot: publicAsset(`assets/characters/open/${pack.id}`),
+      portraitRoot: publicAsset(`assets/ui/fighters/${pack.id}/select`),
+      sourceFacing: pack.visual.sourceFacing,
+      availableSkins: ["00", ...ALTERNATE_SKIN_IDS.filter((id) => palettes[id])],
+      attribution: pack.visual.attribution,
+      sourcePage: pack.visual.sourcePage,
+      license: pack.visual.license,
+      // Optional, so absent from most packs' literal types.
+      keyFrames: (pack.visual as {
+        keyFrames?: Readonly<Partial<Record<RemoteAnimationSlot, number>>>;
+      }).keyFrames ?? {},
+      skinPalettes: palettes,
+    } satisfies FighterVisualManifest];
   }),
 ) as unknown as Readonly<Record<FighterId, FighterVisualManifest>>;
 

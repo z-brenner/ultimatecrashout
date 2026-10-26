@@ -89,42 +89,68 @@ describe("skin recolouring", () => {
     await expect(atlasImageUrl({ mediaUrl: "/plain.webp" })).resolves.toBe("/plain.webp");
   });
 
-  it("revokes a recolour only when its last owner lets go", async () => {
+  it("revokes a recolour only when its last owner lets go, after a grace period", async () => {
     const { recoloredImageUrl, readyRecoloredImageUrl, releaseRecoloredImages } = await loadModule();
-    const kept = await recoloredImageUrl("/atlas-kept.webp", SWAPS, "match");
+    const kept = await recoloredImageUrl("/atlas-kept.webp", SWAPS, "lab");
     await recoloredImageUrl("/atlas-dropped.webp", SWAPS, "match");
     const shared = await recoloredImageUrl("/atlas-shared.webp", SWAPS, "match");
     await recoloredImageUrl("/atlas-shared.webp", SWAPS, "lab");
     const portrait = await recoloredImageUrl("/portrait.png", SWAPS, "ui");
-
-    // Closing the Lab never frees what the match still holds.
-    releaseRecoloredImages("lab");
-    expect(revoked).toEqual([]);
-    expect(readyRecoloredImageUrl("/atlas-shared.webp", SWAPS)).toBe(shared);
-
-    releaseRecoloredImages("match", [{ url: "/atlas-kept.webp#skin-01", swaps: SWAPS }]);
-    expect(revoked.sort()).toEqual(["blob:skin-2", "blob:skin-3"]);
-    expect(readyRecoloredImageUrl("/atlas-kept.webp", SWAPS)).toBe(kept);
-    expect(readyRecoloredImageUrl("/atlas-dropped.webp", SWAPS)).toBeNull();
-    expect(readyRecoloredImageUrl("/portrait.png", SWAPS)).toBe(portrait);
+    vi.useFakeTimers();
+    try {
+      // The match keeps (and so takes over) an atlas only the Lab requested.
+      releaseRecoloredImages("match", [
+        { url: "/atlas-kept.webp#skin-01", swaps: SWAPS },
+        { url: "/atlas-shared.webp#skin-01", swaps: SWAPS },
+      ]);
+      // Closing the Lab never frees what the match still holds.
+      releaseRecoloredImages("lab");
+      expect(revoked).toEqual([]);
+      // Unowned recolours stay usable for the grace period...
+      expect(readyRecoloredImageUrl("/atlas-dropped.webp", SWAPS)).toBe("blob:skin-2");
+      vi.advanceTimersByTime(10_000);
+      // ...then only the one with no owner is revoked.
+      expect(revoked).toEqual(["blob:skin-2"]);
+      expect(readyRecoloredImageUrl("/atlas-dropped.webp", SWAPS)).toBeNull();
+      expect(readyRecoloredImageUrl("/atlas-kept.webp", SWAPS)).toBe(kept);
+      expect(readyRecoloredImageUrl("/atlas-shared.webp", SWAPS)).toBe(shared);
+      expect(readyRecoloredImageUrl("/portrait.png", SWAPS)).toBe(portrait);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it("frees a released in-flight recolour when it lands, unless it was adopted again", async () => {
+  it("hands a working URL to callers of a recolour released in flight, then frees it", async () => {
     const { recoloredImageUrl, readyRecoloredImageUrl, releaseRecoloredImages } = await loadModule();
     const orphan = recoloredImageUrl("/atlas-orphan.webp", SWAPS, "match");
     releaseRecoloredImages("match");
-    await orphan;
-    expect(revoked).toEqual(["blob:skin-1"]);
-    expect(readyRecoloredImageUrl("/atlas-orphan.webp", SWAPS)).toBeNull();
+    vi.useFakeTimers();
+    try {
+      await expect(orphan).resolves.toBe("blob:skin-1");
+      expect(revoked).toEqual([]);
+      vi.advanceTimersByTime(10_000);
+      expect(revoked).toEqual(["blob:skin-1"]);
+      expect(readyRecoloredImageUrl("/atlas-orphan.webp", SWAPS)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
+  it("lets a new request adopt a released recolour instead of redoing it", async () => {
+    const { recoloredImageUrl, releaseRecoloredImages } = await loadModule();
     const first = recoloredImageUrl("/atlas-adopted.webp", SWAPS, "lab");
     releaseRecoloredImages("lab");
     const second = recoloredImageUrl("/atlas-adopted.webp", SWAPS, "match");
-    // One shared job, not a duplicate recolour.
     expect(second).toBe(first);
-    await expect(second).resolves.toBe("blob:skin-2");
-    expect(revoked).toEqual(["blob:skin-1"]);
-    expect(readyRecoloredImageUrl("/atlas-adopted.webp", SWAPS)).toBe("blob:skin-2");
+    vi.useFakeTimers();
+    try {
+      await expect(second).resolves.toBe("blob:skin-1");
+      vi.advanceTimersByTime(10_000);
+      expect(revoked).toEqual([]);
+      expect(requested).toEqual(["/atlas-adopted.webp"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("gives each recolour a stable DOM-safe token", async () => {

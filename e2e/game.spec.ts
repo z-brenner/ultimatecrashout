@@ -206,8 +206,10 @@ test.describe("skins", () => {
     await page.locator("[data-ui-action='pick-fighter'][data-fighter='buckle']").click();
     await expect(page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='1'] small"))
       .toHaveText("Buckle • Cobalt");
+    // Recolouring starts a worker on first use; allow for a cold start on a busy runner.
+    const RECOLOR_TIMEOUT = { timeout: 15_000 };
     const portrait = page.locator(".cc-player-panel--p2 .cc-portrait__sprite");
-    await expect(portrait).toHaveAttribute("src", /^blob:/);
+    await expect(portrait).toHaveAttribute("src", /^blob:/, RECOLOR_TIMEOUT);
     await expect(portrait).not.toHaveAttribute("data-skin-portrait", /.*/);
 
     await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='1']").click();
@@ -220,7 +222,7 @@ test.describe("skins", () => {
         .getSnapshot().fighters.map(({ skin }) => skin),
     debugApi)).toEqual(["00", "01"]);
     await expect(page.locator(".cc-hud-player").nth(1).locator(".cc-portrait__sprite"))
-      .toHaveAttribute("src", /^blob:/);
+      .toHaveAttribute("src", /^blob:/, RECOLOR_TIMEOUT);
     expect(workers.some((url) => url.includes("skinRecolor.worker"))).toBe(true);
     expect(problems).toEqual([]);
   });

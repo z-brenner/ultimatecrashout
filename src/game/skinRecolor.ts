@@ -20,6 +20,21 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
+/**
+ * An unowned recolour is revoked only after this grace period, so an image
+ * that was just handed its URL can still load it, and a quick re-request
+ * (e.g. a rematch) adopts it instead of recolouring again.
+ */
+const REVOKE_GRACE_MS = 10_000;
+
+const scheduleRevoke = (key: string, entry: CacheEntry): void => {
+  setTimeout(() => {
+    if (entry.owners.size > 0 || cache.get(key) !== entry) return;
+    cache.delete(key);
+    if (entry.url) URL.revokeObjectURL(entry.url);
+  }, REVOKE_GRACE_MS);
+};
+
 /** Recent failures, so a broken source is not re-requested on every render. */
 const failures = new Map<string, number>();
 const FAILURE_RETRY_MS = 30_000;
@@ -70,6 +85,8 @@ type WorkerReply = { id: number; blob?: Blob; error?: string };
 interface PooledWorker {
   worker: Worker;
   jobs: Map<number, { resolve: (blob: Blob) => void; reject: (error: Error) => void }>;
+  /** Set by its first reply; a worker that errors before one cannot run here. */
+  started: boolean;
 }
 /** Up to two workers recolour a skin's atlases in parallel, off the main thread. */
 const MAX_WORKERS = 2;
@@ -85,8 +102,9 @@ const startWorker = (): PooledWorker | null => {
     workersUnsupported = true;
     return null;
   }
-  const pooled: PooledWorker = { worker, jobs: new Map() };
+  const pooled: PooledWorker = { worker, jobs: new Map(), started: false };
   worker.addEventListener("message", (event: MessageEvent<WorkerReply>) => {
+    pooled.started = true;
     const job = pooled.jobs.get(event.data.id);
     if (!job) return;
     pooled.jobs.delete(event.data.id);
@@ -94,10 +112,14 @@ const startWorker = (): PooledWorker | null => {
     else job.reject(new Error(event.data.error ?? "Recolour failed"));
   });
   // A crashed worker fails only its own jobs (they fall back to the main
-  // thread); the next job starts a fresh worker.
+  // thread) and the next job starts a fresh one. A worker that never got
+  // going (blocked script, no OffscreenCanvas 2D) means workers cannot run
+  // here, so stop trying.
   worker.addEventListener("error", () => {
     worker.terminate();
-    pool.splice(pool.indexOf(pooled), 1);
+    if (!pooled.started) workersUnsupported = true;
+    const index = pool.indexOf(pooled);
+    if (index >= 0) pool.splice(index, 1);
     for (const job of pooled.jobs.values()) job.reject(new Error("Recolour worker failed"));
     pooled.jobs.clear();
   });
@@ -167,11 +189,8 @@ export const recoloredImageUrl = (
   entry.job = recolor(url, swaps).then(
     (blobUrl) => {
       entry.url = blobUrl;
-      // Every owner let go while it was in flight: nothing will use it.
-      if (entry.owners.size === 0) {
-        cache.delete(key);
-        URL.revokeObjectURL(blobUrl);
-      }
+      // Every owner let go while it was in flight.
+      if (entry.owners.size === 0) scheduleRevoke(key, entry);
       return blobUrl;
     },
     (error: unknown) => {
@@ -189,10 +208,10 @@ export const readyRecoloredImageUrl = (url: string, swaps: readonly SkinSwap[]):
   cache.get(cacheKey(url, swaps))?.url ?? null;
 
 /**
- * `scope` lets go of every recolour except those in `keep`. A recolour with no
- * owner left is revoked now, or as soon as it finishes if still in flight;
- * a new request before then adopts it instead. Images already decoded from a
- * revoked URL keep rendering.
+ * `scope` lets go of every recolour except those in `keep`, which it takes
+ * ownership of. A recolour left without owners is revoked after a grace
+ * period (once finished, if still in flight); a request before then adopts
+ * it. Images already decoded from a revoked URL keep rendering.
  */
 export const releaseRecoloredImages = (
   scope: Exclude<RecolorScope, "ui">,
@@ -200,11 +219,12 @@ export const releaseRecoloredImages = (
 ): void => {
   const kept = new Set([...keep].map(({ url, swaps }) => cacheKey(url, swaps)));
   for (const [key, entry] of cache) {
-    if (kept.has(key) || !entry.owners.delete(scope) || entry.owners.size > 0) continue;
-    if (entry.url) {
-      cache.delete(key);
-      URL.revokeObjectURL(entry.url);
+    if (kept.has(key)) {
+      entry.owners.add(scope);
+      continue;
     }
+    if (!entry.owners.delete(scope) || entry.owners.size > 0) continue;
+    if (entry.url) scheduleRevoke(key, entry);
   }
 };
 
