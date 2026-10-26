@@ -327,7 +327,49 @@ export const OPEN_FIGHTER_PACKS = [
         "neutral_special": 2,
         "side_special": 1,
         "up_special": 0
-      }
+      },
+      "skins": [
+        {
+          "name": "Cobalt",
+          "swaps": [
+            {
+              "from": "#cea521",
+              "to": "#2a5cdc",
+              "tolerance": 30
+            },
+            {
+              "from": "#d14637",
+              "to": "#f0b428",
+              "tolerance": 20
+            }
+          ]
+        },
+        {
+          "name": "Mint",
+          "swaps": [
+            {
+              "from": "#cea521",
+              "to": "#23c48a",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Rose",
+          "swaps": [
+            {
+              "from": "#cea521",
+              "to": "#e0508c",
+              "tolerance": 30
+            },
+            {
+              "from": "#d14637",
+              "to": "#18b4a0",
+              "tolerance": 20
+            }
+          ]
+        }
+      ]
     },
     "effects": {
       "materials": {
@@ -428,7 +470,39 @@ export const OPEN_FIGHTER_PACKS = [
       "license": {
         "id": "CC0-1.0",
         "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-      }
+      },
+      "skins": [
+        {
+          "name": "Teal",
+          "swaps": [
+            {
+              "from": "#5f2c2c",
+              "to": "#2f665f",
+              "tolerance": 12
+            }
+          ]
+        },
+        {
+          "name": "Cobalt",
+          "swaps": [
+            {
+              "from": "#5f2c2c",
+              "to": "#2f3e66",
+              "tolerance": 12
+            }
+          ]
+        },
+        {
+          "name": "Violet",
+          "swaps": [
+            {
+              "from": "#5f2c2c",
+              "to": "#452f66",
+              "tolerance": 12
+            }
+          ]
+        }
+      ]
     },
     "effects": {
       "materials": {
@@ -537,7 +611,39 @@ export const OPEN_FIGHTER_PACKS = [
       "license": {
         "id": "CC0-1.0",
         "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-      }
+      },
+      "skins": [
+        {
+          "name": "Desert",
+          "swaps": [
+            {
+              "from": "#334535",
+              "to": "#8a7444",
+              "tolerance": 22
+            }
+          ]
+        },
+        {
+          "name": "Arctic",
+          "swaps": [
+            {
+              "from": "#334535",
+              "to": "#5a7f99",
+              "tolerance": 22
+            }
+          ]
+        },
+        {
+          "name": "Rust",
+          "swaps": [
+            {
+              "from": "#334535",
+              "to": "#8a3a2c",
+              "tolerance": 22
+            }
+          ]
+        }
+      ]
     },
     "effects": {
       "materials": {
@@ -644,7 +750,39 @@ export const OPEN_FIGHTER_PACKS = [
       "license": {
         "id": "CC0-1.0",
         "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-      }
+      },
+      "skins": [
+        {
+          "name": "Gold",
+          "swaps": [
+            {
+              "from": "#124587",
+              "to": "#876412",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Crimson",
+          "swaps": [
+            {
+              "from": "#124587",
+              "to": "#87121a",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Emerald",
+          "swaps": [
+            {
+              "from": "#124587",
+              "to": "#128743",
+              "tolerance": 30
+            }
+          ]
+        }
+      ]
     },
     "effects": {
       "materials": {
@@ -836,7 +974,39 @@ export const OPEN_FIGHTER_PACKS = [
       "license": {
         "id": "CC0-1.0",
         "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-      }
+      },
+      "skins": [
+        {
+          "name": "Violet",
+          "swaps": [
+            {
+              "from": "#1e4211",
+              "to": "#381a66",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Rose",
+          "swaps": [
+            {
+              "from": "#1e4211",
+              "to": "#661a3a",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Teal",
+          "swaps": [
+            {
+              "from": "#1e4211",
+              "to": "#1a665c",
+              "tolerance": 30
+            }
+          ]
+        }
+      ]
     },
     "effects": {
       "materials": {
@@ -936,7 +1106,39 @@ export const OPEN_FIGHTER_PACKS = [
       "license": {
         "id": "CC0-1.0",
         "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-      }
+      },
+      "skins": [
+        {
+          "name": "Ember",
+          "swaps": [
+            {
+              "from": "#2b6075",
+              "to": "#75482b",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Rose",
+          "swaps": [
+            {
+              "from": "#2b6075",
+              "to": "#752b4a",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Violet",
+          "swaps": [
+            {
+              "from": "#2b6075",
+              "to": "#482b75",
+              "tolerance": 30
+            }
+          ]
+        }
+      ]
     },
     "effects": {
       "materials": {
@@ -1037,7 +1239,49 @@ export const OPEN_FIGHTER_PACKS = [
       "license": {
         "id": "CC0-1.0",
         "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-      }
+      },
+      "skins": [
+        {
+          "name": "Crimson",
+          "swaps": [
+            {
+              "from": "#213419",
+              "to": "#7a1e22",
+              "tolerance": 30
+            },
+            {
+              "from": "#35241b",
+              "to": "#2b2b33",
+              "tolerance": 14
+            }
+          ]
+        },
+        {
+          "name": "Cobalt",
+          "swaps": [
+            {
+              "from": "#213419",
+              "to": "#1e3c7a",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Violet",
+          "swaps": [
+            {
+              "from": "#213419",
+              "to": "#4f2a7a",
+              "tolerance": 30
+            },
+            {
+              "from": "#35241b",
+              "to": "#5a5048",
+              "tolerance": 14
+            }
+          ]
+        }
+      ]
     },
     "effects": {
       "materials": {
@@ -1233,7 +1477,39 @@ export const OPEN_FIGHTER_PACKS = [
       "license": {
         "id": "CC0-1.0",
         "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-      }
+      },
+      "skins": [
+        {
+          "name": "Cobalt",
+          "swaps": [
+            {
+              "from": "#251d16",
+              "to": "#384566",
+              "tolerance": 10
+            }
+          ]
+        },
+        {
+          "name": "Teal",
+          "swaps": [
+            {
+              "from": "#251d16",
+              "to": "#386660",
+              "tolerance": 10
+            }
+          ]
+        },
+        {
+          "name": "Violet",
+          "swaps": [
+            {
+              "from": "#251d16",
+              "to": "#4a3866",
+              "tolerance": 10
+            }
+          ]
+        }
+      ]
     },
     "effects": {
       "materials": {
@@ -1335,7 +1611,39 @@ export const OPEN_FIGHTER_PACKS = [
       "license": {
         "id": "CC0-1.0",
         "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-      }
+      },
+      "skins": [
+        {
+          "name": "Teal",
+          "swaps": [
+            {
+              "from": "#a5262b",
+              "to": "#26a595",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Cobalt",
+          "swaps": [
+            {
+              "from": "#a5262b",
+              "to": "#264aa5",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Violet",
+          "swaps": [
+            {
+              "from": "#a5262b",
+              "to": "#5826a5",
+              "tolerance": 30
+            }
+          ]
+        }
+      ]
     },
     "effects": {
       "materials": {
@@ -1440,7 +1748,39 @@ export const OPEN_FIGHTER_PACKS = [
       "license": {
         "id": "CC0-1.0",
         "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-      }
+      },
+      "skins": [
+        {
+          "name": "Rose",
+          "swaps": [
+            {
+              "from": "#32af6e",
+              "to": "#af3266",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Cobalt",
+          "swaps": [
+            {
+              "from": "#32af6e",
+              "to": "#3255af",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Violet",
+          "swaps": [
+            {
+              "from": "#32af6e",
+              "to": "#6332af",
+              "tolerance": 30
+            }
+          ]
+        }
+      ]
     },
     "effects": {
       "materials": {
@@ -1644,7 +1984,39 @@ export const OPEN_FIGHTER_PACKS = [
       "license": {
         "id": "CC0-1.0",
         "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-      }
+      },
+      "skins": [
+        {
+          "name": "Teal",
+          "swaps": [
+            {
+              "from": "#963756",
+              "to": "#37968a",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Violet",
+          "swaps": [
+            {
+              "from": "#963756",
+              "to": "#5c3796",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Gold",
+          "swaps": [
+            {
+              "from": "#963756",
+              "to": "#967a37",
+              "tolerance": 30
+            }
+          ]
+        }
+      ]
     },
     "effects": {
       "materials": {
@@ -1743,7 +2115,39 @@ export const OPEN_FIGHTER_PACKS = [
       "license": {
         "id": "CC0-1.0",
         "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-      }
+      },
+      "skins": [
+        {
+          "name": "Ember",
+          "swaps": [
+            {
+              "from": "#77939d",
+              "to": "#9d7357",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Rose",
+          "swaps": [
+            {
+              "from": "#77939d",
+              "to": "#9d5774",
+              "tolerance": 30
+            }
+          ]
+        },
+        {
+          "name": "Violet",
+          "swaps": [
+            {
+              "from": "#77939d",
+              "to": "#72579d",
+              "tolerance": 30
+            }
+          ]
+        }
+      ]
     },
     "effects": {
       "materials": {

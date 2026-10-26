@@ -205,12 +205,15 @@ describe("complete local UI flow", () => {
       "[data-ui-action='cycle-skin'][data-player-slot='0']",
     )!;
     expect(p1Portrait.querySelector("img")?.getAttribute("src")).toContain("/select/00.png");
+    expect(p1Portrait.querySelector("img")?.hasAttribute("data-skin-portrait")).toBe(false);
     p1Portrait.click();
-    expect(
-      root.querySelector<HTMLButtonElement>("[data-ui-action='cycle-skin'][data-player-slot='0'] img")
-        ?.getAttribute("src"),
-    ).toContain(`/${OPEN_P1}/select/00.png`);
-    expect(ui.getMatchConfig().players[0].skin).toBe("00");
+    // Palette skins recolour the 00 portrait; it stays hidden until recoloured.
+    const recolored = root.querySelector<HTMLImageElement>(
+      "[data-ui-action='cycle-skin'][data-player-slot='0'] img",
+    )!;
+    expect(recolored.getAttribute("src")).toContain(`/${OPEN_P1}/select/00.png`);
+    expect(recolored.hasAttribute("data-skin-portrait")).toBe(true);
+    expect(ui.getMatchConfig().players[0].skin).toBe("01");
 
     click(root, "[data-ui-action='activate-player'][data-player-slot='1']");
     click(root, `[data-ui-action='pick-fighter'][data-fighter-slot='1'][data-fighter='${OPEN_P2}']`);
@@ -395,6 +398,39 @@ describe("complete local UI flow", () => {
     expect(ui.getMatchConfig().players[1]).toMatchObject({ fighter: OPEN_P2, cpu: true });
     expect(ui.getMatchConfig().players[0].fighter).not.toBe(OPEN_P2);
     ui.destroy();
+  });
+
+  it("never lets two players on the same fighter share a skin", () => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    const ui = new UIController(root);
+    const skins = () => ui.getMatchConfig().players.map(({ skin }) => skin);
+
+    click(root, "[data-ui-action='boot-skip']");
+    click(root, "[data-ui-action='title-start']");
+    click(root, "[data-ui-action='home-play']");
+    click(root, `[data-ui-action='pick-fighter'][data-fighter-slot='0'][data-fighter='${OPEN_P1}']`);
+    click(root, "[data-ui-action='activate-player'][data-player-slot='1']");
+    click(root, `[data-ui-action='pick-fighter'][data-fighter-slot='1'][data-fighter='${OPEN_P1}']`);
+    // The second player to pick moves off the first player's skin.
+    expect(skins()).toEqual(["00", "01"]);
+
+    // Cycling skips the skin the other player wears: 01 -> 02 -> 03 -> (00 taken) -> 01.
+    const cycle = (slot: number) => click(root, `[data-ui-action='cycle-skin'][data-player-slot='${slot}']`);
+    cycle(1);
+    cycle(1);
+    expect(skins()).toEqual(["00", "03"]);
+    cycle(1);
+    expect(skins()).toEqual(["00", "01"]);
+    // P1 cycling onto P2's skin moves past it as well.
+    cycle(0);
+    expect(skins()).toEqual(["02", "01"]);
+    ui.destroy();
+
+    // Starting on the same fighter (e.g. a one-fighter roster) applies the rule too.
+    const mirrored = new UIController(root, {}, { initialFighters: [OPEN_P1, OPEN_P1] });
+    expect(mirrored.getMatchConfig().players.map(({ skin }) => skin)).toEqual(["00", "01"]);
+    mirrored.destroy();
   });
 
   it("shows distinct AZERTY labels when capturing A/Q and Z/W", () => {

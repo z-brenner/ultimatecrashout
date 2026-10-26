@@ -12,6 +12,12 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { holdContentBuildLock } from "./content_build_lock.mjs";
+import {
+  MAX_SKIN_SWAPS,
+  MIN_SWAP_SATURATION,
+  isSwappableColor,
+  parseHexColor,
+} from "../src/game/skinPalette.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packRoot = resolve(process.env.FIGHTER_PACKS_ROOT ?? join(projectRoot, "fighters"));
@@ -246,6 +252,8 @@ const validateReadyPack = (pack, render, config) => {
     }
   }
 
+  if (visual.skins !== undefined) validateSkins(id, visual.skins);
+
   assert(isObject(effects), `${id}: effects is missing`);
   assert(isObject(effects.materials), `${id}: effects.materials is missing`);
   for (const [move, material] of Object.entries(effects.materials)) {
@@ -428,6 +436,42 @@ const expandSpriteStrips = async (render, directory, slotNames) => {
   }
   const { spriteStrips: _spriteStrips, ...rest } = render;
   return { ...rest, actions, slots };
+};
+
+/** Skins 01–03 are runtime palette swaps of the 00 atlases (see src/game/skinPalette.mjs). */
+const MAX_SKINS = 3;
+const validateSkins = (id, skins) => {
+  assert(Array.isArray(skins) && skins.length >= 1 && skins.length <= MAX_SKINS,
+    `${id}: visual.skins must be a list of 1-${MAX_SKINS} skins (skin 00 is the original art)`);
+  const names = new Set();
+  skins.forEach((skin, index) => {
+    const where = `visual.skins[${index}]`;
+    assert(isObject(skin), `${id}: ${where} must be an object`);
+    for (const key of Object.keys(skin)) {
+      assert(key === "name" || key === "swaps", `${id}: ${where}.${key} is not a skin field (name, swaps)`);
+    }
+    assert(nonEmpty(skin.name) && skin.name.trim().length <= 24, `${id}: ${where}.name must be 1-24 characters`);
+    const name = skin.name.trim().toLowerCase();
+    assert(!names.has(name), `${id}: ${where}.name "${skin.name}" is used twice`);
+    names.add(name);
+    assert(Array.isArray(skin.swaps) && skin.swaps.length >= 1 && skin.swaps.length <= MAX_SKIN_SWAPS,
+      `${id}: ${where}.swaps must list 1-${MAX_SKIN_SWAPS} colour swaps`);
+    skin.swaps.forEach((swap, swapIndex) => {
+      const at = `${where}.swaps[${swapIndex}]`;
+      assert(isObject(swap), `${id}: ${at} must be an object`);
+      for (const key of Object.keys(swap)) {
+        assert(["from", "to", "tolerance"].includes(key), `${id}: ${at}.${key} is not a swap field (from, to, tolerance)`);
+      }
+      for (const key of ["from", "to"]) {
+        assert(parseHexColor(swap[key]) !== null, `${id}: ${at}.${key} must be a #rrggbb colour`);
+      }
+      assert(isSwappableColor(swap.from),
+        `${id}: ${at}.from ${swap.from} is too grey or dark to match anything; swaps only recolour colours ` +
+        `with at least ${Math.round(MIN_SWAP_SATURATION * 100)}% saturation (run npm run fighter:skins -- ${id})`);
+      assert(swap.tolerance === undefined || (finite(swap.tolerance) && swap.tolerance >= 1 && swap.tolerance <= 90),
+        `${id}: ${at}.tolerance must be 1-90 (degrees of hue)`);
+    });
+  });
 };
 
 const loadPacks = async () => {

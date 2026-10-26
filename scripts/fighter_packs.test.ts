@@ -166,6 +166,46 @@ describe("fighter pack CLI", () => {
     expect(() => runCli(workspace, "build")).toThrow(message);
   });
 
+  const writeSkinnedPack = (workspace: ReturnType<typeof createWorkspace>, skins: unknown): void => {
+    const fighterDirectory = join(workspace.packs, "rgs-stick");
+    cpSync(join(projectRoot, "fighters/rgs-stick"), fighterDirectory, { recursive: true });
+    const fighterPath = join(fighterDirectory, "fighter.json");
+    const fighter = JSON.parse(readFileSync(fighterPath, "utf8"));
+    fighter.visual.skins = skins;
+    writeFileSync(fighterPath, `${JSON.stringify(fighter, null, 2)}\n`);
+  };
+
+  it("accepts palette-swap skins and publishes them in the registry", () => {
+    const workspace = createWorkspace();
+    writeSkinnedPack(workspace, [
+      { name: "Crimson", swaps: [{ from: "#f6c41a", to: "#c8323c" }] },
+      { name: "Teal", swaps: [{ from: "#f6c41a", to: "#20cea6", tolerance: 30 }, { from: "#ff543c", to: "#2a6cff" }] },
+    ]);
+    runCli(workspace, "build");
+    const registry = readFileSync(workspace.registry, "utf8");
+    expect(registry).toContain('"name": "Crimson"');
+    expect(registry).toContain('"tolerance": 30');
+  });
+
+  it.each([
+    [[], "visual.skins must be a list of 1-3 skins"],
+    [[{ name: "A", swaps: [{ from: "#f6c41a", to: "#c8323c" }] }, { name: "B", swaps: [{ from: "#f6c41a", to: "#000000" }] },
+      { name: "C", swaps: [{ from: "#f6c41a", to: "#ffffff" }] }, { name: "D", swaps: [{ from: "#f6c41a", to: "#123456" }] }],
+    "visual.skins must be a list of 1-3 skins"],
+    [[{ name: "Crimson", swaps: [] }], "visual.skins[0].swaps must list 1-6 colour swaps"],
+    [[{ name: "Crimson", swaps: [{ from: "red", to: "#c8323c" }] }], "visual.skins[0].swaps[0].from must be a #rrggbb colour"],
+    [[{ name: "Ghost", swaps: [{ from: "#808080", to: "#c8323c" }] }], "visual.skins[0].swaps[0].from #808080 is too grey or dark"],
+    [[{ name: "Crimson", swaps: [{ from: "#f6c41a", to: "#c8323c", tolerance: 120 }] }], "visual.skins[0].swaps[0].tolerance must be 1-90"],
+    [[{ name: "Crimson", swaps: [{ from: "#f6c41a", to: "#c8323c", hue: 3 }] }], "visual.skins[0].swaps[0].hue is not a swap field"],
+    [[{ name: "Crimson", swaps: [{ from: "#f6c41a", to: "#c8323c" }] }, { name: "crimson ", swaps: [{ from: "#f6c41a", to: "#123456" }] }],
+      'visual.skins[1].name "crimson " is used twice'],
+    [[{ name: "Crimson", palette: "red", swaps: [{ from: "#f6c41a", to: "#c8323c" }] }], "visual.skins[0].palette is not a skin field"],
+  ])("rejects invalid skins (%j)", (skins, message) => {
+    const workspace = createWorkspace();
+    writeSkinnedPack(workspace, skins);
+    expect(() => runCli(workspace, "build")).toThrow(message);
+  });
+
   const writeStripPack = (
     workspace: ReturnType<typeof createWorkspace>,
     strips: string[],

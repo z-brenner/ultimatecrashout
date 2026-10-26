@@ -164,7 +164,18 @@
       "forward_smash": 4, "up_smash": 4, "down_smash": 3,
       "neutral_air": 1, "forward_air": 1, "back_air": 1, "up_air": 1, "down_air": 1,
       "neutral_special": 2, "side_special": 1, "up_special": 0
-    }
+    },
+    "skins": [
+      { "name": "Cobalt", "swaps": [
+        { "from": "#cea521", "to": "#2a5cdc", "tolerance": 30 },
+        { "from": "#d14637", "to": "#f0b428", "tolerance": 20 }
+      ] },
+      { "name": "Mint", "swaps": [{ "from": "#cea521", "to": "#23c48a", "tolerance": 30 }] },
+      { "name": "Rose", "swaps": [
+        { "from": "#cea521", "to": "#e0508c", "tolerance": 30 },
+        { "from": "#d14637", "to": "#18b4a0", "tolerance": 20 }
+      ] }
+    ]
   },
   "effects": {
     "materials": {

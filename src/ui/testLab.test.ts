@@ -9,6 +9,7 @@ import {
   labTimelineFrame,
 } from "./testLab";
 import { OPEN_FIGHTER_IDS } from "../game/contracts";
+import { FIGHTER_SKINS } from "../game/content";
 import { competitiveHitboxesForMove, createEmptyInput, createGame } from "../game/engine";
 import { getFighterDefinition } from "../game/roster";
 import { moveAnimationFrame, remoteAnimationSetForFighter } from "../game/characterAssets";
@@ -137,7 +138,8 @@ describe("Test Lab animation transport", () => {
     animation.value = "idle";
     animation.dispatchEvent(new Event("change", { bubbles: true }));
     const skin = root.querySelector<HTMLSelectElement>("[data-lab-field='skin']")!;
-    expect(Array.from(skin.options, ({ value }) => value)).toEqual(["00"]);
+    expect(Array.from(skin.options, ({ value }) => value))
+      .toEqual(FIGHTER_SKINS[OPEN_FIGHTER_IDS[0]].map(({ id }) => id));
 
     expect(loadedSources.at(-1)).toBe(
       `/assets/characters/open/${OPEN_FIGHTER_IDS[0]}/00/idle.webp?v=clean-animation-4`,

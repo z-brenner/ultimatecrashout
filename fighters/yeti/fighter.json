@@ -87,7 +87,39 @@
     "license": {
       "id": "CC0-1.0",
       "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-    }
+    },
+    "skins": [
+      {
+        "name": "Ember",
+        "swaps": [
+          {
+            "from": "#2b6075",
+            "to": "#75482b",
+            "tolerance": 30
+          }
+        ]
+      },
+      {
+        "name": "Rose",
+        "swaps": [
+          {
+            "from": "#2b6075",
+            "to": "#752b4a",
+            "tolerance": 30
+          }
+        ]
+      },
+      {
+        "name": "Violet",
+        "swaps": [
+          {
+            "from": "#2b6075",
+            "to": "#482b75",
+            "tolerance": 30
+          }
+        ]
+      }
+    ]
   },
   "effects": {
     "materials": {

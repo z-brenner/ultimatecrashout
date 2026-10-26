@@ -10,6 +10,7 @@ import {
   type RemoteAnimationSlot,
 } from "../game/characterAssets";
 import { FIGHTER_VISUAL_MANIFESTS } from "../game/fighterVisuals";
+import { atlasImageUrl, releaseRecoloredImages } from "../game/skinRecolor";
 import { FIGHTER_SKINS } from "../game/content";
 import type { FighterId, InputFrame, SkinId, StageId } from "../game/contracts";
 import {
@@ -161,6 +162,8 @@ export class TestLabController {
     frame: 0,
     moveFrame: 0,
   };
+  /** Bumped per atlas request so a slow recolour cannot replace a newer selection. */
+  private imageGeneration = 0;
   private showHurtbox = false;
   private showFrameData = false;
   private readonly boundsCanvas = document.createElement("canvas");
@@ -200,6 +203,8 @@ export class TestLabController {
     if (this.destroyed) return;
     this.destroyed = true;
     cancelAnimationFrame(this.raf);
+    // Browsing skins recolours many atlases; free the Lab's own.
+    releaseRecoloredImages("lab");
     this.image.removeEventListener("load", this.draw);
     this.root.removeEventListener("click", this.handleClick);
     this.root.removeEventListener("change", this.handleChange);
@@ -305,7 +310,16 @@ export class TestLabController {
       this.state.moveFrame = 0;
     }
     const definition = this.definition();
-    this.image.src = definition.mediaUrl;
+    const generation = ++this.imageGeneration;
+    if (definition.palette) {
+      // A recoloured skin: show nothing stale while the recolour runs.
+      this.image.removeAttribute("src");
+      void atlasImageUrl(definition, "lab").then((url) => {
+        if (!this.destroyed && generation === this.imageGeneration) this.image.src = url;
+      });
+    } else {
+      this.image.src = definition.mediaUrl;
+    }
     this.syncMoveFrame();
     const slider = this.root.querySelector<HTMLInputElement>("[data-lab-field='frame']");
     if (slider) {

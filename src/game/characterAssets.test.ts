@@ -124,16 +124,25 @@ describe("open fighter atlases", () => {
     for (const fighter of FIGHTER_IDS) {
       const manifest = FIGHTER_VISUAL_MANIFESTS[fighter];
       expect(manifest.sourceKind).toMatch(/^open-/);
-      expect(manifest.availableSkins).toEqual(["00"]);
+      // Skin 00 is the rendered art; 01–03 are palette swaps of it.
+      const palettes = Object.keys(manifest.skinPalettes);
+      expect(manifest.availableSkins).toEqual(["00", ...palettes]);
+      expect(palettes).toEqual(["01", "02", "03"].slice(0, palettes.length));
       expect(CHARACTER_PORTRAITS[fighter]).toBe(
         `/assets/ui/fighters/${fighter}/select/00.png`,
       );
 
       const resolved = remoteAnimationSetForFighter(fighter, "03");
-      expect(resolved.skin).toBe("00");
+      expect(resolved.skin).toBe(palettes.includes("03") ? "03" : "00");
       expect(Object.keys(resolved.animations)).toEqual([...REMOTE_ANIMATION_SLOTS]);
       for (const definition of Object.values(resolved.animations)) {
+        // Palette skins download the 00 atlas; the fragment only separates cache keys.
         expect(definition.mediaUrl).toContain(`/assets/characters/open/${fighter}/00/`);
+        expect(Boolean(definition.palette)).toBe(resolved.skin !== "00");
+        if (definition.palette) {
+          expect(definition.mediaUrl).toMatch(/#skin-03$/);
+          expect(definition.palette).toEqual(manifest.skinPalettes["03"]?.swaps);
+        }
         expect(definition.mediaUrl).toContain(CHARACTER_ATLAS_REVISION);
         expect(definition.containsHitboxOverlay).toBe(false);
         expect(definition.frameCount).toBeGreaterThan(0);

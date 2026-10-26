@@ -16,6 +16,8 @@ import {
 import { OPEN_ANIMATION_METADATA } from "./openAnimationMetadata";
 import { FIGHTER_IDS, getFighterDefinition, type AttackDefinition, type MoveName } from "./roster";
 import { publicAsset } from "./publicAsset";
+import type { SkinSwap } from "./skinPalette.mjs";
+import { atlasImageUrl, releaseRecoloredImages } from "./skinRecolor";
 
 const ALL_SKIN_IDS = ["00", "01", "02", "03"] as const satisfies readonly SkinId[];
 const DEFAULT_ANIMATION_CELL_SIZE = 192;
@@ -146,6 +148,8 @@ export interface RemoteAnimationDefinition {
   sourceFacing: "left" | "right";
   /** Plays authored frames backwards when the engine already applied the end-facing. */
   reversePlayback?: boolean;
+  /** Palette swaps applied to the 00 atlas for a recoloured skin. */
+  palette?: readonly SkinSwap[];
 }
 
 export interface RemoteAnimationConfig {
@@ -252,8 +256,14 @@ const atlasAnimation = (
   const manifest = FIGHTER_VISUAL_MANIFESTS[fighter];
   const metadata = OPEN_METADATA[fighter]?.[slot];
   const version = `?v=${CHARACTER_ATLAS_REVISION}`;
+  const palette = manifest.skinPalettes[skin];
   return {
-    mediaUrl: `${manifest.atlasRoot}/${skin}/${slot}.webp${version}`,
+    // Recoloured skins reuse the 00 atlas (one download); the fragment keeps
+    // their cache keys apart without changing the HTTP request.
+    mediaUrl: palette
+      ? `${manifest.atlasRoot}/00/${slot}.webp${version}#skin-${skin}`
+      : `${manifest.atlasRoot}/${skin}/${slot}.webp${version}`,
+    ...(palette ? { palette: palette.swaps } : {}),
     sourcePage: manifest.sourcePage,
     label: ANIMATION_LABELS[slot],
     containsHitboxOverlay: false,
@@ -603,6 +613,9 @@ export class CharacterSpriteLibrary {
     for (const fighterSkin of this.primedFighterSkins) {
       if (!selected.has(fighterSkin)) this.primedFighterSkins.delete(fighterSkin);
     }
+    // Recoloured atlases of skins that left the roster are freed.
+    releaseRecoloredImages("match", resolvedSelections.flatMap(({ animations }) =>
+      Object.values(animations).flatMap(({ mediaUrl, palette }) => palette ? [{ url: mediaUrl, swaps: palette }] : [])));
     this.activeAtlasImages.clear();
     this.lastResolvedAtlasFrames.clear();
   }
@@ -669,6 +682,9 @@ export class CharacterSpriteLibrary {
           if (priorityUrls.has(definition.mediaUrl)) {
             this.pinnedRemoteUrls.add(definition.mediaUrl);
             await this.preloadRemoteDefinition(definition, controller.signal);
+          } else if (definition.palette) {
+            // Recolour during loading, not the first time a move shows up mid-match.
+            await atlasImageUrl(definition);
           } else if (typeof fetch === "function") {
             const response = await fetch(definition.mediaUrl, {
               cache: "force-cache",
@@ -844,8 +860,17 @@ export class CharacterSpriteLibrary {
       },
       { once: true },
     );
-    image.src = definition.mediaUrl;
-    this.ensureRemoteImageDecoded(image);
+    if (definition.palette) {
+      // Until the recolour lands the image has no source, so frame lookups
+      // keep their stable fallback exactly as for a slow download.
+      void atlasImageUrl(definition).then((url) => {
+        image.src = url;
+        this.ensureRemoteImageDecoded(image);
+      });
+    } else {
+      image.src = definition.mediaUrl;
+      this.ensureRemoteImageDecoded(image);
+    }
     this.remoteImages.set(definition.mediaUrl, image);
     this.trimRemoteImages();
     return image;
@@ -954,17 +979,21 @@ export class CharacterSpriteLibrary {
       this.pinnedRemoteUrls.add(definition.mediaUrl);
       this.loadRemoteImage(definition);
     }
-    const urls = Object.values(animations)
-      .map(({ mediaUrl }) => mediaUrl)
-      .filter((mediaUrl) => mediaUrl !== activeUrl);
-    // Cache every compressed atlas in bounded batches during the entrance.
-    // Only frequent actions are decoded eagerly, which avoids both combat-time
-    // network stalls and an all-at-once GPU memory spike.
+    const pending = Object.values(animations)
+      .filter(({ mediaUrl }) => mediaUrl !== activeUrl);
+    // Cache every compressed atlas (recoloured, for palette skins) in bounded
+    // batches during the entrance. Only frequent actions are decoded eagerly,
+    // which avoids both combat-time network stalls and an all-at-once GPU
+    // memory spike.
     void (async () => {
-      for (let index = 0; index < urls.length; index += 3) {
-        await Promise.all(urls.slice(index, index + 3).map(async (mediaUrl) => {
+      for (let index = 0; index < pending.length; index += 3) {
+        await Promise.all(pending.slice(index, index + 3).map(async (definition) => {
           try {
-            const response = await fetch(mediaUrl, { cache: "force-cache" });
+            if (definition.palette) {
+              await atlasImageUrl(definition);
+              return;
+            }
+            const response = await fetch(definition.mediaUrl, { cache: "force-cache" });
             if (response.ok) await response.arrayBuffer();
           } catch {
             // The normal Image request remains the source of truth on failure.

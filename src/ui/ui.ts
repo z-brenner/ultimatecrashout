@@ -12,6 +12,13 @@ import type {
   StageId,
 } from "../game/contracts";
 import { isOpenFighterId } from "../game/contracts";
+import type { SkinSwap } from "../game/skinPalette.mjs";
+import {
+  readyRecoloredImageUrl,
+  recolorFailed,
+  recolorToken,
+  recoloredImageUrl,
+} from "../game/skinRecolor";
 import {
   getFighterSkin,
   getFighterSkins,
@@ -304,6 +311,31 @@ function keyLabel(code: string, layoutLabels?: ReadonlyMap<string, string>): str
   return layoutLabel ? normalizeKeyLabel(layoutLabel) : formatKeyCode(code, false);
 }
 
+/** Portrait recolours with a settle callback already attached. */
+const portraitRequests = new Set<string>();
+
+/**
+ * Starts recolouring a skin portrait and returns the token its <img> carries
+ * until the recoloured image is swapped in (hidden meanwhile, so the original
+ * colours never flash). Templates re-render often: finished portraits come
+ * straight from the recolour cache, and each recolour settles its images once.
+ */
+function requestSkinPortrait(baseUrl: string, swaps: readonly SkinSwap[]): string {
+  const token = recolorToken(baseUrl, swaps);
+  if (portraitRequests.has(token)) return token;
+  portraitRequests.add(token);
+  const settle = (url: string): void => {
+    portraitRequests.delete(token);
+    if (typeof document === "undefined") return;
+    for (const image of document.querySelectorAll<HTMLImageElement>(`img[data-skin-portrait="${token}"]`)) {
+      image.src = url;
+      image.removeAttribute("data-skin-portrait");
+    }
+  };
+  recoloredImageUrl(baseUrl, swaps).then(settle, () => settle(baseUrl));
+  return token;
+}
+
 function portraitMarkup(
   id: FighterId,
   compact = false,
@@ -313,9 +345,15 @@ function portraitMarkup(
   const fighter = fighterById(id);
   const selectedSkin = getFighterSkin(id, skin);
   const portraitUrl = selectedSkin.portrait;
-  const imageUrl = thumbnail && skin === "00"
+  const baseUrl = thumbnail
     ? portraitUrl.replace(/\.png$/, ".thumb.webp")
     : portraitUrl;
+  const recolors = selectedSkin.swaps.length > 0 && !recolorFailed(baseUrl, selectedSkin.swaps);
+  const recolored = recolors ? readyRecoloredImageUrl(baseUrl, selectedSkin.swaps) : null;
+  const pendingKey = recolors && !recolored
+    ? requestSkinPortrait(baseUrl, selectedSkin.swaps)
+    : null;
+  const imageUrl = recolored ?? baseUrl;
   const initials = fighter.name
     .split(/\s+/)
     .map((part) => part[0] ?? "")
@@ -325,7 +363,7 @@ function portraitMarkup(
   return `
     <span class="cc-portrait ${selectedSkin.visualReady ? "cc-portrait--image" : "cc-portrait--pending"} cc-portrait--${id}${compact ? " cc-portrait--compact" : ""}" data-portrait-source="${selectedSkin.visualReady ? "image" : "pending"}" aria-hidden="true">
       ${selectedSkin.visualReady
-        ? `<img class="cc-portrait__sprite" src="${imageUrl}" alt="" loading="lazy" decoding="async" fetchpriority="${thumbnail ? "low" : "auto"}" draggable="false">`
+        ? `<img class="cc-portrait__sprite" src="${imageUrl}"${pendingKey ? ` data-skin-portrait="${pendingKey}"` : ""} alt="" loading="lazy" decoding="async" fetchpriority="${thumbnail ? "low" : "auto"}" draggable="false">`
         : `<span class="cc-portrait__placeholder" style="--cc-portrait-primary:${fighter.primary};--cc-portrait-secondary:${fighter.secondary}"><b>${escapeHtml(initials)}</b><small>Rendering required</small></span>`}
     </span>`;
 }
@@ -391,6 +429,7 @@ export class UIController extends EventTarget {
     this.root = root;
     this.callbacks = callbacks;
     this.selectedFighters = options.initialFighters ?? DEFAULT_FIGHTERS;
+    this.avoidMirrorSkin(1);
 
     const suppliedBindings = options.settings?.bindings;
     this.settings = {
@@ -570,6 +609,28 @@ export class UIController extends EventTarget {
     };
   }
 
+  /** The next skin of `fighter` after `skin` that is not `taken`, or `skin` if none. */
+  private freeSkin(fighter: FighterId, skin: SkinId, taken: SkinId): SkinId {
+    const skins = getFighterSkins(fighter);
+    const current = skins.findIndex(({ id }) => id === skin);
+    for (let step = 1; step < skins.length; step += 1) {
+      const candidate = skins[(current + step) % skins.length]!.id;
+      if (candidate !== taken) return candidate;
+    }
+    return skin;
+  }
+
+  /**
+   * Two players on the same fighter never share a skin when another exists:
+   * the player who just changed fighter or skin moves to the next free skin.
+   */
+  private avoidMirrorSkin(slot: PlayerSlot): void {
+    const other: PlayerSlot = slot === 0 ? 1 : 0;
+    const fighter = this.selectedFighters[slot];
+    if (fighter !== this.selectedFighters[other] || this.selectedSkins[slot] !== this.selectedSkins[other]) return;
+    this.selectedSkins[slot] = this.freeSkin(fighter, this.selectedSkins[slot], this.selectedSkins[other]);
+  }
+
   /** Select a fighter for an explicit player without relying on the shared active tab. */
   selectFighterForPlayer(slot: PlayerSlot, fighterId: FighterId): void {
     if (this.currentScreen !== "character-select") return;
@@ -581,6 +642,7 @@ export class UIController extends EventTarget {
     if (!skins.some(({ id }) => id === this.selectedSkins[slot])) {
       this.selectedSkins[slot] = skins[0]!.id;
     }
+    this.avoidMirrorSkin(slot);
     this.playerConfirmed[slot] = false;
     this.callbacks.onFighterSelected?.(fighter.id, slot);
     this.showCharacterSelect();
@@ -1094,8 +1156,8 @@ export class UIController extends EventTarget {
   showHud(state?: HUDState): void {
     const hudState = state ?? {
       players: [
-        { fighter: this.selectedFighters[0], name: this.playerNames[0], stocks: this.matchStocks, damage: 0 },
-        { fighter: this.selectedFighters[1], name: this.playerNames[1], stocks: this.matchStocks, damage: 0 },
+        { fighter: this.selectedFighters[0], skin: this.selectedSkins[0], name: this.playerNames[0], stocks: this.matchStocks, damage: 0 },
+        { fighter: this.selectedFighters[1], skin: this.selectedSkins[1], name: this.playerNames[1], stocks: this.matchStocks, damage: 0 },
       ],
       remainingTimeMs: this.timeLimitSeconds === null ? null : this.timeLimitSeconds * 1000,
     };
@@ -1414,10 +1476,10 @@ export class UIController extends EventTarget {
     const fallback = this.screenRoot.querySelector<HTMLElement>("[data-victory-fallback]");
     const context = canvas?.getContext("2d");
     if (!canvas || !context) return;
-    void import("../game/characterAssets").then(({
+    void Promise.all([import("../game/characterAssets"), import("../game/skinRecolor")]).then(([{
       REMOTE_ANIMATION_CONFIG,
       remoteAnimationSetForFighter,
-    }) => {
+    }, { atlasImageUrl }]) => {
       if (this.destroyed || generation !== this.victoryLoadGeneration || this.currentScreen !== "results") return;
       const definition = remoteAnimationSetForFighter(
         fighter,
@@ -1452,7 +1514,9 @@ export class UIController extends EventTarget {
         canvas.style.filter = "none";
         this.victoryAnimationFrame = requestAnimationFrame(draw);
       }, { once: true });
-      image.src = definition.mediaUrl;
+      void atlasImageUrl(definition).then((url) => {
+        image.src = url;
+      });
     });
   }
 
@@ -2013,6 +2077,7 @@ export class UIController extends EventTarget {
           const skins = getFighterSkins(this.selectedFighters[slot]);
           const currentIndex = skins.findIndex(({ id }) => id === this.selectedSkins[slot]);
           this.selectedSkins[slot] = skins[(currentIndex + 1) % skins.length]!.id;
+          this.avoidMirrorSkin(slot);
           this.activePlayer = slot;
           this.playerConfirmed[slot] = false;
           this.showCharacterSelect();
@@ -2172,6 +2237,7 @@ export class UIController extends EventTarget {
       ) {
         this.callbacks.onUiSound?.("confirm");
         this.selectedSkins[slot] = skin;
+        this.avoidMirrorSkin(slot);
         this.playerConfirmed[slot] = false;
         this.showCharacterSelect();
       }
@@ -2216,6 +2282,7 @@ export class UIController extends EventTarget {
       ) {
         this.callbacks.onUiSound?.("confirm");
         this.selectedSkins[slot] = skin;
+        this.avoidMirrorSkin(slot);
         this.playerConfirmed[slot] = false;
         this.showCharacterSelect();
       }
