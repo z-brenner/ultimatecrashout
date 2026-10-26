@@ -39,7 +39,7 @@
         "label": "Arcane Bolt",
         "damage": 9,
         "projectile": {
-            "kind": "energy-orb",
+          "kind": "energy-orb",
           "speed": 410,
           "gravity": 0,
           "lifetimeFrames": 105,
@@ -84,7 +84,39 @@
     "license": {
       "id": "CC0-1.0",
       "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-    }
+    },
+    "skins": [
+      {
+        "name": "Teal",
+        "swaps": [
+          {
+            "from": "#5f2c2c",
+            "to": "#2f665f",
+            "tolerance": 12
+          }
+        ]
+      },
+      {
+        "name": "Cobalt",
+        "swaps": [
+          {
+            "from": "#5f2c2c",
+            "to": "#2f3e66",
+            "tolerance": 12
+          }
+        ]
+      },
+      {
+        "name": "Violet",
+        "swaps": [
+          {
+            "from": "#5f2c2c",
+            "to": "#452f66",
+            "tolerance": 12
+          }
+        ]
+      }
+    ]
   },
   "effects": {
     "materials": {

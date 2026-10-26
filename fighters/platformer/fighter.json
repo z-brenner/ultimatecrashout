@@ -91,7 +91,39 @@
     "license": {
       "id": "CC0-1.0",
       "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-    }
+    },
+    "skins": [
+      {
+        "name": "Gold",
+        "swaps": [
+          {
+            "from": "#124587",
+            "to": "#876412",
+            "tolerance": 30
+          }
+        ]
+      },
+      {
+        "name": "Crimson",
+        "swaps": [
+          {
+            "from": "#124587",
+            "to": "#87121a",
+            "tolerance": 30
+          }
+        ]
+      },
+      {
+        "name": "Emerald",
+        "swaps": [
+          {
+            "from": "#124587",
+            "to": "#128743",
+            "tolerance": 30
+          }
+        ]
+      }
+    ]
   },
   "effects": {
     "materials": {

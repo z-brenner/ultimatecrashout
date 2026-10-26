@@ -28,6 +28,7 @@
     "fighter:new": "node scripts/fighter_packs.mjs new",
     "fighter:build": "node scripts/fighter_packs.mjs build",
     "fighter:check": "node scripts/fighter_packs.mjs check",
+    "fighter:skins": "node scripts/fighter_skins.mjs",
     "stage:new": "node scripts/stage_packs.mjs new",
     "stage:build": "node scripts/stage_packs.mjs build",
     "stage:check": "node scripts/stage_packs.mjs check",

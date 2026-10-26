@@ -249,6 +249,48 @@ frames. Keys are the 17 attack slots (`jab` … `down_special`, snake_case).
 `npm run fighter:check` rejects a key frame past the end of its atlas.
 Fighters without key frames keep the even stretch.
 
+## Alternate skins (palette swaps)
+
+Skin `00` is the pack's own art. Up to three more skins are declared in
+`visual.skins` and recoloured in the browser from the `00` atlases and
+portrait, so they cost no extra files or downloads:
+
+```json
+"skins": [
+  { "name": "Cobalt", "swaps": [
+    { "from": "#cea521", "to": "#2a5cdc", "tolerance": 30 },
+    { "from": "#d14637", "to": "#f0b428", "tolerance": 20 }
+  ] },
+  { "name": "Mint", "swaps": [{ "from": "#cea521", "to": "#23c48a" }] }
+]
+```
+
+- Each swap moves one colour family: pixels whose hue is within `tolerance`
+  degrees (default 24) of `from` take the hue of `to`, and keep their own
+  shading relative to `from` (a shadow stays a shadow). The swap fades out
+  toward the edge of the tolerance, so gradients do not band.
+- Greys, whites, near-blacks, and transparent pixels never change, so
+  outlines, metal, and eyes stay as drawn. A `from` colour that is too grey
+  or dark to match anything is rejected by `fighter:build`.
+- When two players pick the same fighter, the one who picked second moves
+  to a different skin automatically.
+
+Let the tool start you off. It reads the built atlases, lists the fighter's
+colour families (flagging likely skin tones so faces are not recoloured),
+and proposes three skins:
+
+```sh
+npm run fighter:skins -- my-fighter            # colour families + suggestion
+npm run fighter:skins -- my-fighter --preview  # .generated/skins/my-fighter.png
+npm run fighter:skins -- my-fighter --write    # store the suggestion in fighter.json
+```
+
+Then tune names, colours, and tolerances by hand. With `npm run dev`
+running, open **Lab**, pick the fighter and a skin, and every save of
+`fighter.json` reloads the preview. A fighter drawn only in greys and blacks
+cannot be told apart by palette swaps; the tool says so, and such a pack
+should leave `visual.skins` out.
+
 ## Debugging moves
 
 For frame-by-frame work, open **Lab** from the main menu, pick a fighter and an

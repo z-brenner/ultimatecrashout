@@ -41,7 +41,7 @@
         "label": "Cursed Orb",
         "damage": 11,
         "projectile": {
-            "kind": "energy-orb",
+          "kind": "energy-orb",
           "speed": 430,
           "gravity": 0,
           "lifetimeFrames": 110,
@@ -86,7 +86,39 @@
     "license": {
       "id": "CC0-1.0",
       "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-    }
+    },
+    "skins": [
+      {
+        "name": "Cobalt",
+        "swaps": [
+          {
+            "from": "#251d16",
+            "to": "#384566",
+            "tolerance": 10
+          }
+        ]
+      },
+      {
+        "name": "Teal",
+        "swaps": [
+          {
+            "from": "#251d16",
+            "to": "#386660",
+            "tolerance": 10
+          }
+        ]
+      },
+      {
+        "name": "Violet",
+        "swaps": [
+          {
+            "from": "#251d16",
+            "to": "#4a3866",
+            "tolerance": 10
+          }
+        ]
+      }
+    ]
   },
   "effects": {
     "materials": {

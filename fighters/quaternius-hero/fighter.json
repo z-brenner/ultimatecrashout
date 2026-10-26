@@ -85,7 +85,49 @@
     "license": {
       "id": "CC0-1.0",
       "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-    }
+    },
+    "skins": [
+      {
+        "name": "Crimson",
+        "swaps": [
+          {
+            "from": "#213419",
+            "to": "#7a1e22",
+            "tolerance": 30
+          },
+          {
+            "from": "#35241b",
+            "to": "#2b2b33",
+            "tolerance": 14
+          }
+        ]
+      },
+      {
+        "name": "Cobalt",
+        "swaps": [
+          {
+            "from": "#213419",
+            "to": "#1e3c7a",
+            "tolerance": 30
+          }
+        ]
+      },
+      {
+        "name": "Violet",
+        "swaps": [
+          {
+            "from": "#213419",
+            "to": "#4f2a7a",
+            "tolerance": 30
+          },
+          {
+            "from": "#35241b",
+            "to": "#5a5048",
+            "tolerance": 14
+          }
+        ]
+      }
+    ]
   },
   "effects": {
     "materials": {

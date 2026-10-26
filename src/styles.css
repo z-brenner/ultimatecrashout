@@ -5535,3 +5535,6 @@ button.cc-home-tile:focus-visible::after { opacity: 1; }
 .cc-results::before {
   background: linear-gradient(100deg, rgba(33, 104, 222, 0.96), rgba(16, 40, 58, 0.78) 62%, transparent);
 }
+
+/* A recoloured skin portrait stays hidden until its colours are applied. */
+.cc-portrait__sprite[data-skin-portrait] { visibility: hidden; }

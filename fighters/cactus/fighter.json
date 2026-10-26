@@ -84,7 +84,39 @@
     "license": {
       "id": "CC0-1.0",
       "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-    }
+    },
+    "skins": [
+      {
+        "name": "Violet",
+        "swaps": [
+          {
+            "from": "#1e4211",
+            "to": "#381a66",
+            "tolerance": 30
+          }
+        ]
+      },
+      {
+        "name": "Rose",
+        "swaps": [
+          {
+            "from": "#1e4211",
+            "to": "#661a3a",
+            "tolerance": 30
+          }
+        ]
+      },
+      {
+        "name": "Teal",
+        "swaps": [
+          {
+            "from": "#1e4211",
+            "to": "#1a665c",
+            "tolerance": 30
+          }
+        ]
+      }
+    ]
   },
   "effects": {
     "materials": {

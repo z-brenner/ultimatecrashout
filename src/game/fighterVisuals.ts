@@ -3,6 +3,16 @@ import type { FighterId, OpenFighterId, SkinId } from "./contracts";
 import type { RemoteAnimationSlot } from "./characterAssets";
 import { OPEN_FIGHTER_PACKS } from "./generated/openFighterRegistry";
 import { publicAsset } from "./publicAsset";
+import type { SkinSwap } from "./skinPalette.mjs";
+
+/** A runtime palette-swap skin declared in the pack's visual.skins. */
+export interface FighterSkinPalette {
+  name: string;
+  swaps: readonly SkinSwap[];
+}
+
+/** Skins after 00 are recoloured from the 00 art, in pack order. */
+const ALTERNATE_SKIN_IDS = ["01", "02", "03"] as const satisfies readonly SkinId[];
 
 export interface FighterVisualManifest {
   fighter: FighterId;
@@ -19,6 +29,8 @@ export interface FighterVisualManifest {
    * first active frame (see moveAnimationFrame).
    */
   keyFrames: Readonly<Partial<Record<RemoteAnimationSlot, number>>>;
+  /** Palette swaps for skins 01–03; skin 00 is the original art. */
+  skinPalettes: Readonly<Partial<Record<SkinId, FighterSkinPalette>>>;
 }
 
 interface FighterRuntimeStatus {
@@ -30,6 +42,13 @@ const OPEN_FIGHTER_RUNTIME_STATUS = OPEN_FIGHTER_RUNTIME_DATA as Readonly<
   Partial<Record<OpenFighterId, FighterRuntimeStatus>>
 >;
 
+const declaredSkins = (pack: (typeof OPEN_FIGHTER_PACKS)[number]): readonly FighterSkinPalette[] =>
+  // Optional, so absent from most packs' literal types.
+  (pack.visual as { skins?: readonly FighterSkinPalette[] }).skins ?? [];
+
+const skinPalettes = (skins: readonly FighterSkinPalette[]): Partial<Record<SkinId, FighterSkinPalette>> =>
+  Object.fromEntries(skins.slice(0, ALTERNATE_SKIN_IDS.length).map((skin, index) => [ALTERNATE_SKIN_IDS[index], skin]));
+
 export const FIGHTER_VISUAL_MANIFESTS = Object.fromEntries(
   OPEN_FIGHTER_PACKS.map((pack) => [pack.id, {
     fighter: pack.id,
@@ -37,7 +56,7 @@ export const FIGHTER_VISUAL_MANIFESTS = Object.fromEntries(
     atlasRoot: publicAsset(`assets/characters/open/${pack.id}`),
     portraitRoot: publicAsset(`assets/ui/fighters/${pack.id}/select`),
     sourceFacing: pack.visual.sourceFacing,
-    availableSkins: ["00"],
+    availableSkins: ["00", ...ALTERNATE_SKIN_IDS.slice(0, declaredSkins(pack).length)],
     attribution: pack.visual.attribution,
     sourcePage: pack.visual.sourcePage,
     license: pack.visual.license,
@@ -45,6 +64,7 @@ export const FIGHTER_VISUAL_MANIFESTS = Object.fromEntries(
     keyFrames: (pack.visual as {
       keyFrames?: Readonly<Partial<Record<RemoteAnimationSlot, number>>>;
     }).keyFrames ?? {},
+    skinPalettes: skinPalettes(declaredSkins(pack)),
   } satisfies FighterVisualManifest]),
 ) as unknown as Readonly<Record<FighterId, FighterVisualManifest>>;
 

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  debugApi,
   fighters,
   holdKey,
   readyFighterIds,
@@ -185,6 +186,42 @@ test.describe("controller", () => {
     const after = await fighters(page);
     const moved = after!.map((fighter, slot) => Math.abs(fighter.x - start![slot]!.x));
     expect(Math.max(...moved)).toBeGreaterThan(40);
+    expect(problems).toEqual([]);
+  });
+});
+
+test.describe("skins", () => {
+  test("a mirror match gives player 2 a recoloured skin, off the main thread", async ({ page }) => {
+    const problems = trackProblems(page);
+    const workers: string[] = [];
+    page.on("worker", (worker) => workers.push(worker.url()));
+    await page.goto("./");
+    await page.locator("[data-ui-action='boot-skip']").click();
+    await expect(page.locator("[data-ui-action='title-start']")).toBeVisible();
+    await page.keyboard.press("Enter");
+    await page.locator("[data-ui-action='home-play']").click();
+
+    await page.locator("[data-ui-action='pick-fighter'][data-fighter='buckle']").click();
+    await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='0']").click();
+    await page.locator("[data-ui-action='pick-fighter'][data-fighter='buckle']").click();
+    await expect(page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='1'] small"))
+      .toHaveText("Buckle • Cobalt");
+    const portrait = page.locator(".cc-player-panel--p2 .cc-portrait__sprite");
+    await expect(portrait).toHaveAttribute("src", /^blob:/);
+    await expect(portrait).not.toHaveAttribute("data-skin-portrait", /.*/);
+
+    await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='1']").click();
+    await page.locator("[data-ui-action='open-stage-select']").click();
+    await page.locator("[data-ui-action='select-stage']").first().click();
+    await page.locator("[data-ui-action='stage-confirm']").click();
+    await waitForPlaying(page);
+    expect(await page.evaluate((api) =>
+      (window as unknown as Record<string, { getSnapshot(): { fighters: { skin: string }[] } }>)[api]!
+        .getSnapshot().fighters.map(({ skin }) => skin),
+    debugApi)).toEqual(["00", "01"]);
+    await expect(page.locator(".cc-hud-player").nth(1).locator(".cc-portrait__sprite"))
+      .toHaveAttribute("src", /^blob:/);
+    expect(workers.some((url) => url.includes("skinRecolor.worker"))).toBe(true);
     expect(problems).toEqual([]);
   });
 });

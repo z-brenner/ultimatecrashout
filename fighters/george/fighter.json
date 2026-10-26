@@ -93,7 +93,39 @@
     "license": {
       "id": "CC0-1.0",
       "url": "https://creativecommons.org/publicdomain/zero/1.0/"
-    }
+    },
+    "skins": [
+      {
+        "name": "Desert",
+        "swaps": [
+          {
+            "from": "#334535",
+            "to": "#8a7444",
+            "tolerance": 22
+          }
+        ]
+      },
+      {
+        "name": "Arctic",
+        "swaps": [
+          {
+            "from": "#334535",
+            "to": "#5a7f99",
+            "tolerance": 22
+          }
+        ]
+      },
+      {
+        "name": "Rust",
+        "swaps": [
+          {
+            "from": "#334535",
+            "to": "#8a3a2c",
+            "tolerance": 22
+          }
+        ]
+      }
+    ]
   },
   "effects": {
     "materials": {

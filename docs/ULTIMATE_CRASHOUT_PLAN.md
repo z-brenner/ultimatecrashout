@@ -73,7 +73,9 @@ Ordered by how much they constrain the goals.
    for new atlases.
 10. ~~The Lab's Hitbox checkbox was a placeholder.~~ It now draws the engine's
     frame data per move frame.
-11. **Skins**: `SkinId` declares 00–03, but only 00 exists anywhere.
+11. ~~Skins: only 00 existed.~~ Skins 01–03 are runtime palette swaps declared
+    in `visual.skins`; 12 of 15 fighters have three. RGS Stick, RGS Character
+    Prototype, and Wolf have no saturated colours to swap.
 12. **UI code size**: `ui.ts` (~2.5k lines of HTML strings) and `styles.css`
     (~5.5k lines with a late identity override layer) are workable but brittle
     for a full visual redesign.
@@ -113,7 +115,8 @@ Ordered by how much they constrain the goals.
 
 ### Phase 3 — scale the game
 
-1. Palette-swap skins at runtime (tint ramps), avoiding 4× atlases.
+1. ~~Palette-swap skins at runtime~~ (done): `visual.skins`, recoloured in
+   the browser; `npm run fighter:skins` suggests and previews them.
 2. Stage hazards and moving platforms as audited, data-driven mechanics.
 3. Per-fighter audio in the pack contract.
 4. N-player refactor (tuples → arrays) as its own PR series, with the engine

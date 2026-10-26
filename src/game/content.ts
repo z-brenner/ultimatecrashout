@@ -1,4 +1,5 @@
 import { FIGHTER_IDS, type FighterId, type SkinId } from "./contracts";
+import type { SkinSwap } from "./skinPalette.mjs";
 import {
   FIGHTER_VISUAL_MANIFESTS,
   isFighterProductionReady,
@@ -8,7 +9,10 @@ import {
 export interface FighterSkinDefinition {
   id: SkinId;
   label: string;
+  /** The 00 portrait; alternate skins recolour it with `swaps` at runtime. */
   portrait: string;
+  /** Palette swaps for a recoloured skin; empty for the original art. */
+  swaps: readonly SkinSwap[];
   filter: string;
   /** All 50 runtime atlases exist, so the fighter can be selected as a prototype. */
   visualReady: boolean;
@@ -29,8 +33,9 @@ const skinsFor = (fighter: FighterId): readonly FighterSkinDefinition[] => {
   const manifest = FIGHTER_VISUAL_MANIFESTS[fighter];
   return manifest.availableSkins.map((id) => ({
     id,
-    label: labels[id],
-    portrait: `${manifest.portraitRoot}/${id}.png`,
+    label: manifest.skinPalettes[id]?.name ?? labels[id],
+    portrait: `${manifest.portraitRoot}/00.png`,
+    swaps: manifest.skinPalettes[id]?.swaps ?? [],
     // Gameplay uses separately rendered materials. Keep this compatibility
     // field neutral so callers never recolour skin, eyes, weapons or armour.
     filter: "none",
