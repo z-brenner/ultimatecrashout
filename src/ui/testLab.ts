@@ -203,8 +203,8 @@ export class TestLabController {
     if (this.destroyed) return;
     this.destroyed = true;
     cancelAnimationFrame(this.raf);
-    // Browsing skins recolours many atlases; free them with the Lab.
-    releaseRecoloredImages([]);
+    // Browsing skins recolours many atlases; free the Lab's own.
+    releaseRecoloredImages("lab");
     this.image.removeEventListener("load", this.draw);
     this.root.removeEventListener("click", this.handleClick);
     this.root.removeEventListener("change", this.handleChange);
@@ -314,7 +314,7 @@ export class TestLabController {
     if (definition.palette) {
       // A recoloured skin: show nothing stale while the recolour runs.
       this.image.removeAttribute("src");
-      void atlasImageUrl(definition).then((url) => {
+      void atlasImageUrl(definition, "lab").then((url) => {
         if (!this.destroyed && generation === this.imageGeneration) this.image.src = url;
       });
     } else {

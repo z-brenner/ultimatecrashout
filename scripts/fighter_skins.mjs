@@ -31,7 +31,7 @@ const fail = (message) => {
   console.error(message);
   process.exit(1);
 };
-if (!id) fail("Usage: npm run fighter:skins -- <fighter-id> [--preview] [--write]");
+if (!id) fail("Usage: npm run fighter:skins -- <fighter-id> [--preview] [--write | --replace]");
 
 const packPath = join(root, "fighters", id, "fighter.json");
 if (!existsSync(packPath)) fail(`Fighter pack not found: fighters/${id}/fighter.json`);
@@ -218,10 +218,12 @@ if (args.includes("--preview") && skins) {
 }
 
 if (args.includes("--write") || args.includes("--replace")) {
-  if (!suggestion) fail(`${id}: no suggestion to write`);
   if (pack.visual.skins && !args.includes("--replace")) {
-    fail(`${id}: fighter.json already has visual.skins; use --replace to overwrite them`);
+    // Never overwrite hand-tuned skins by accident; a no-op is not an error.
+    console.log(`\nfighters/${id}/fighter.json already has visual.skins; kept them (use --replace to overwrite).`);
+    process.exit(0);
   }
+  if (!suggestion) fail(`${id}: no suggestion to write`);
   pack.visual.skins = suggestion;
   writeFileSync(packPath, `${JSON.stringify(pack, null, 2)}\n`);
   console.log(`\nWrote visual.skins to fighters/${id}/fighter.json; run npm run fighter:build to validate.`);

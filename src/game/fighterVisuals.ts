@@ -50,7 +50,9 @@ const skinPalettes = (pack: (typeof OPEN_FIGHTER_PACKS)[number]): Partial<Record
 };
 
 export const FIGHTER_VISUAL_MANIFESTS = Object.fromEntries(
-  OPEN_FIGHTER_PACKS.map((pack) => [pack, skinPalettes(pack)] as const).map(([pack, palettes]) => [pack.id, {
+  OPEN_FIGHTER_PACKS.map((pack) => {
+    const palettes = skinPalettes(pack);
+    return [pack.id, {
     fighter: pack.id,
     sourceKind: pack.kind === "3d" ? "open-3d" : "open-2d",
     atlasRoot: publicAsset(`assets/characters/open/${pack.id}`),
@@ -65,7 +67,8 @@ export const FIGHTER_VISUAL_MANIFESTS = Object.fromEntries(
       keyFrames?: Readonly<Partial<Record<RemoteAnimationSlot, number>>>;
     }).keyFrames ?? {},
     skinPalettes: palettes,
-  } satisfies FighterVisualManifest]),
+  } satisfies FighterVisualManifest];
+  }),
 ) as unknown as Readonly<Record<FighterId, FighterVisualManifest>>;
 
 export const isFighterVisualReady = (fighter: FighterId): boolean =>

@@ -614,7 +614,7 @@ export class CharacterSpriteLibrary {
       if (!selected.has(fighterSkin)) this.primedFighterSkins.delete(fighterSkin);
     }
     // Recoloured atlases of skins that left the roster are freed.
-    releaseRecoloredImages(resolvedSelections.flatMap(({ animations }) =>
+    releaseRecoloredImages("match", resolvedSelections.flatMap(({ animations }) =>
       Object.values(animations).flatMap(({ mediaUrl, palette }) => palette ? [{ url: mediaUrl, swaps: palette }] : [])));
     this.activeAtlasImages.clear();
     this.lastResolvedAtlasFrames.clear();

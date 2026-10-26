@@ -426,6 +426,11 @@ describe("complete local UI flow", () => {
     cycle(0);
     expect(skins()).toEqual(["02", "01"]);
     ui.destroy();
+
+    // Starting on the same fighter (e.g. a one-fighter roster) applies the rule too.
+    const mirrored = new UIController(root, {}, { initialFighters: [OPEN_P1, OPEN_P1] });
+    expect(mirrored.getMatchConfig().players.map(({ skin }) => skin)).toEqual(["00", "01"]);
+    mirrored.destroy();
   });
 
   it("shows distinct AZERTY labels when capturing A/Q and Z/W", () => {

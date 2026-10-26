@@ -582,11 +582,12 @@ export class UIController extends EventTarget {
   }
 
   getMatchConfig(): MatchConfig {
+    const skins = this.mirrorSafeSkins();
     return {
       players: [
         {
           fighter: this.selectedFighters[0],
-          skin: this.selectedSkins[0],
+          skin: skins[0],
           name: this.playerCpu[0] ? "CPU 1" : this.playerNames[0],
           slot: 0,
           cpu: this.playerCpu[0],
@@ -594,7 +595,7 @@ export class UIController extends EventTarget {
         },
         {
           fighter: this.selectedFighters[1],
-          skin: this.selectedSkins[1],
+          skin: skins[1],
           name: this.playerCpu[1] ? "CPU 2" : this.playerNames[1],
           slot: 1,
           cpu: this.playerCpu[1],
@@ -609,6 +610,17 @@ export class UIController extends EventTarget {
     };
   }
 
+  /** The next skin of `fighter` after `skin` that is not `taken`, or `skin` if none. */
+  private freeSkin(fighter: FighterId, skin: SkinId, taken: SkinId): SkinId {
+    const skins = getFighterSkins(fighter);
+    const current = skins.findIndex(({ id }) => id === skin);
+    for (let step = 1; step < skins.length; step += 1) {
+      const candidate = skins[(current + step) % skins.length]!.id;
+      if (candidate !== taken) return candidate;
+    }
+    return skin;
+  }
+
   /**
    * Two players on the same fighter never share a skin when another exists:
    * the player who just changed fighter or skin moves to the next free skin.
@@ -617,15 +629,14 @@ export class UIController extends EventTarget {
     const other: PlayerSlot = slot === 0 ? 1 : 0;
     const fighter = this.selectedFighters[slot];
     if (fighter !== this.selectedFighters[other] || this.selectedSkins[slot] !== this.selectedSkins[other]) return;
-    const skins = getFighterSkins(fighter);
-    const current = skins.findIndex(({ id }) => id === this.selectedSkins[slot]);
-    for (let step = 1; step < skins.length; step += 1) {
-      const candidate = skins[(current + step) % skins.length]!.id;
-      if (candidate !== this.selectedSkins[other]) {
-        this.selectedSkins[slot] = candidate;
-        return;
-      }
-    }
+    this.selectedSkins[slot] = this.freeSkin(fighter, this.selectedSkins[slot], this.selectedSkins[other]);
+  }
+
+  /** Skins as launched: a safety net (without side effects) for any path that skipped the rule. */
+  private mirrorSafeSkins(): [SkinId, SkinId] {
+    const [first, second] = this.selectedSkins;
+    if (this.selectedFighters[0] !== this.selectedFighters[1] || first !== second) return [first, second];
+    return [first, this.freeSkin(this.selectedFighters[1], second, first)];
   }
 
   /** Select a fighter for an explicit player without relying on the shared active tab. */
