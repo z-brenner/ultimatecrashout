@@ -552,7 +552,15 @@ export class GameRenderer {
     let stageCompleted = 0;
     let itemCompleted = 0;
     const nativeStageResources = definition.scene && this.nativeStageCanvas ? 1 : 0;
-    const total = (): number => fighterTotal + 2 + nativeStageResources + itemImages.length;
+    // Arena, backdrop, and any moving-platform sprites.
+    const stageImages = [
+      this.stageArt.get(stage),
+      this.stageBackdrops.get(stage),
+      ...definition.platforms.map(({ motion }) =>
+        motion?.spriteUrl ? this.platformSprites.get(motion.spriteUrl) : undefined),
+    ].filter((image): image is HTMLImageElement => Boolean(image));
+    const total = (): number =>
+      fighterTotal + stageImages.length + nativeStageResources + itemImages.length;
     const report = (phase: MatchPreloadProgress["phase"]): void => {
       options.onProgress?.({
         completed: fighterCompleted + stageCompleted + itemCompleted,
@@ -570,12 +578,6 @@ export class GameRenderer {
         report("fighters");
       },
     });
-    const stageImages = [
-      this.stageArt.get(stage),
-      this.stageBackdrops.get(stage),
-      ...getStageDefinition(stage).platforms.map(({ motion }) =>
-        motion?.spriteUrl ? this.platformSprites.get(motion.spriteUrl) : undefined),
-    ].filter((image): image is HTMLImageElement => Boolean(image));
     const stageLoads = stageImages.map(async (image) => {
       await waitForImage(image, options.signal);
       stageCompleted += 1;

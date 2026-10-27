@@ -1103,7 +1103,8 @@ export class CombatGame {
   private readonly options: Required<Pick<GameOptions, "seed" | "countdownFrames">> &
     Pick<GameOptions, "spawnPositions">;
   private readonly random: SeededRandom;
-  private stage: StageSnapshot;
+  /** Hazards are not stored here: their state is derived per snapshot from `this.hazards`. */
+  private stage: Omit<StageSnapshot, "hazards">;
   /** Moving platforms' positions on the previous frame, for landing sweeps. */
   private platformPreviousPositions = new Map<string, Vec2>();
   private hazards: readonly HazardDefinition[] = [];
@@ -1248,7 +1249,7 @@ export class CombatGame {
         })),
         hazards: this.hazards.map((hazard) => {
           const phase = hazardPhase(hazard.schedule, this.playingFrames());
-          return { id: hazard.id, area: hazard.area, color: hazard.color, state: phase.state, progress: phase.progress };
+          return { id: hazard.id, area: { ...hazard.area }, color: hazard.color, state: phase.state, progress: phase.progress };
         }),
         blastZone: { ...this.stage.blastZone },
       },
@@ -1331,7 +1332,7 @@ export class CombatGame {
     this.nextItemFrame = this.config.items ? this.itemIntervalFrames() : Number.POSITIVE_INFINITY;
   }
 
-  private createStage(): StageSnapshot {
+  private createStage(): Omit<StageSnapshot, "hazards"> {
     const definition = getStageDefinition(this.config.stage);
     const platforms = definition.platforms.map((platform) => {
       const start = platform.motion ? platformMotionPosition(platform.motion, 0) : platform;
@@ -1361,7 +1362,6 @@ export class CombatGame {
       id: definition.id,
       platforms,
       ledges,
-      hazards: [],
       blastZone: { ...definition.blastZone },
     };
   }
@@ -5115,7 +5115,11 @@ export class CombatGame {
     return previous ? top - (platform.position.y - previous.y) : top;
   }
 
-  /** Each fighter inside an active hazard is launched once per activation. */
+  /**
+   * Each fighter inside an active hazard is launched once per activation.
+   * Hazards are environmental and unblockable by design: intangibility
+   * avoids them, but shields and super armor do not.
+   */
   private resolveHazards(inputs: InputPair): void {
     const frame = this.playingFrames();
     for (const hazard of this.hazards) {

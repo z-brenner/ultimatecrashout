@@ -51,6 +51,26 @@ describe("CpuController", () => {
     expect(relaxed.direction).toEqual(unaware.direction);
   });
 
+  it("does not flee a hazard off the edge of the stage", () => {
+    // Default stage: the main platform spans x -710 to 710.
+    const game = createGame(config, {
+      countdownFrames: 0,
+      spawnPositions: [{ x: -650, y: 60 }, { x: 400, y: 60 }],
+    });
+    const base = game.step([createCpuController(0, 3).next(game.getSnapshot()), createCpuController(1, 1).next(game.getSnapshot())]);
+    const near = (state: "idle" | "active") => ({
+      ...base,
+      phase: "playing" as const,
+      stage: {
+        ...base.stage,
+        hazards: [{ id: "edge", area: { x: -600, y: 60, width: 60, height: 120 }, color: "#ff3b3b", state, progress: 0 }],
+      },
+    });
+    // Running left would leave the stage: the CPU plays on instead of fleeing.
+    expect(createCpuController(0, 3, 9).next(near("active")).direction)
+      .toEqual(createCpuController(0, 3, 9).next(near("idle")).direction);
+  });
+
   it("uses an upward special to recover from very low offstage", () => {
     const game = createGame(config, {
       countdownFrames: 0,

@@ -549,8 +549,9 @@ export class TestLabController {
       const route = platform.motion.mode === "loop"
         ? [...platform.motion.path, platform.motion.path[0]!]
         : platform.motion.path;
+      // Drawn at the walking surface, like the surface lines next to it.
       const points = route
-        .map((point) => stageWorldToPixel(stage, point))
+        .map((point) => stageWorldToPixel(stage, { x: point.x, y: point.y + platform.height / 2 }))
         .map(({ x, y }) => `${x.toFixed(2)},${y.toFixed(2)}`)
         .join(" ");
       return `<polyline points="${points}" data-stage-path="${escapeHtml(platform.id)}" class="is-path" />`;

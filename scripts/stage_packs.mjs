@@ -377,27 +377,24 @@ const loadPacks = async () => {
 const generatedRegistry = (loaded) => {
   const ready = loaded.filter(({ pack }) => pack.status === "ready");
   const imports = [];
+  /** Emits a `?url` import for an asset and returns its placeholder. */
+  const addImport = (identifier, absolute) => {
+    let importPath = relative(dirname(registryOut), absolute).split(sep).join("/");
+    if (!importPath.startsWith(".")) importPath = `./${importPath}`;
+    imports.push(`import ${identifier} from ${JSON.stringify(`${importPath}?url`)};`);
+    return `__${identifier}__`;
+  };
   const packs = ready.map(({ pack, assets }, index) => {
     const runtime = {};
     for (const key of ["preview", "thumbnail", "arena", "backdrop", "scene"]) {
       const absolute = assets[key];
       if (!absolute) continue;
-      const identifier = `stage${index}${key[0].toUpperCase()}${key.slice(1)}Url`;
-      let importPath = relative(dirname(registryOut), absolute).split(sep).join("/");
-      if (!importPath.startsWith(".")) importPath = `./${importPath}`;
-      imports.push(`import ${identifier} from ${JSON.stringify(`${importPath}?url`)};`);
-      runtime[`${key}Url`] = `__${identifier}__`;
+      runtime[`${key}Url`] = addImport(`stage${index}${key[0].toUpperCase()}${key.slice(1)}Url`, absolute);
     }
     const spriteEntries = Object.entries(assets.sprites ?? {});
     if (spriteEntries.length > 0) {
-      runtime.spriteUrls = {};
-      spriteEntries.forEach(([platformId, absolute], spriteIndex) => {
-        const identifier = `stage${index}Sprite${spriteIndex}Url`;
-        let importPath = relative(dirname(registryOut), absolute).split(sep).join("/");
-        if (!importPath.startsWith(".")) importPath = `./${importPath}`;
-        imports.push(`import ${identifier} from ${JSON.stringify(`${importPath}?url`)};`);
-        runtime.spriteUrls[platformId] = `__${identifier}__`;
-      });
+      runtime.spriteUrls = Object.fromEntries(spriteEntries.map(([platformId, absolute], spriteIndex) =>
+        [platformId, addImport(`stage${index}Sprite${spriteIndex}Url`, absolute)]));
     }
     return { ...pack, runtime };
   });

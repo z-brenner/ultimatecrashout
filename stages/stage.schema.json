@@ -149,7 +149,7 @@
         "periodFrames": { "type": "integer", "minimum": 60, "maximum": 3600 },
         "mode": { "enum": ["pingpong", "loop"], "default": "pingpong" },
         "easing": { "enum": ["linear", "sine"], "default": "linear", "description": "Ping-pong only." },
-        "phaseFrames": { "type": "integer", "minimum": 0 },
+        "phaseFrames": { "type": "integer", "minimum": 0, "description": "Less than periodFrames." },
         "sprite": {
           "$ref": "#/$defs/assetPath",
           "description": "Image at the arena's pixel scale, top centre on the platform surface. Without one, a slab in the stage colours is drawn."
@@ -183,7 +183,7 @@
             "periodFrames": { "type": "integer", "minimum": 60, "maximum": 3600 },
             "warningFrames": { "type": "integer", "minimum": 30 },
             "activeFrames": { "type": "integer", "minimum": 1 },
-            "phaseFrames": { "type": "integer", "minimum": 0 }
+            "phaseFrames": { "type": "integer", "minimum": 0, "description": "Less than periodFrames." }
           }
         },
         "hit": {

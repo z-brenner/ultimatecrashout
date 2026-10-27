@@ -1,6 +1,7 @@
 import type { ActionName, FighterId, InputFrame, PlayerSlot } from "./contracts";
 import type { FighterSnapshot, GameSnapshot } from "./engine";
 import { getFighterDefinition } from "./roster";
+import { hazardOverlaps } from "./stageMechanics.mjs";
 
 export interface AIDifficulty {
   reactionFrames: [number, number];
@@ -158,23 +159,23 @@ export class CpuController {
   /**
    * Walks out of a hazard zone (with a margin) away from its centre. Level 1
    * only notices a live zone; higher levels already react to the warning.
+   * Fleeing never runs off the main stage; with no room, it stays put rather
+   * than crossing the zone.
    */
   private hazardEscape(self: FighterSnapshot, snapshot: GameSnapshot): { x: number; y: number } | null {
     const margin = 40;
     const { width, height } = getFighterDefinition(self.fighter).size;
+    const main = snapshot.stage.platforms.find(({ id }) => id === "main");
     for (const hazard of snapshot.stage.hazards) {
       if (hazard.state === "idle" || (hazard.state === "warning" && this.level === 1)) continue;
       const { area } = hazard;
-      const inside =
-        Math.abs(self.position.x - area.x) <= area.width / 2 + width / 2 + margin &&
-        Math.abs(self.position.y - area.y) <= area.height / 2 + height / 2 + margin;
-      if (!inside) continue;
+      if (!hazardOverlaps(area, self.position, width / 2 + margin, height / 2 + margin)) continue;
       const away = self.position.x === area.x
         ? (self.position.x > 0 ? -1 : 1)
         : Math.sign(self.position.x - area.x);
-      // Never run off the stage to dodge a hazard.
-      const direction = Math.abs(self.position.x + away * 120) > 480 ? -away : away;
-      return { x: direction, y: 0 };
+      const ahead = self.position.x + away * 120;
+      if (main && (ahead < main.x - main.width / 2 || ahead > main.x + main.width / 2)) return null;
+      return { x: away, y: 0 };
     }
     return null;
   }
