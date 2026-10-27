@@ -28,6 +28,49 @@ describe("CpuController", () => {
     expect(AI_DIFFICULTIES[3].defendChance).toBeGreaterThan(AI_DIFFICULTIES[1].defendChance);
   });
 
+  it("walks out of a warning or live hazard zone, away from its centre", () => {
+    const game = createGame(config, {
+      countdownFrames: 0,
+      spawnPositions: [{ x: -30, y: 60 }, { x: 400, y: 60 }],
+    });
+    const base = game.step([createCpuController(0, 3).next(game.getSnapshot()), createCpuController(1, 1).next(game.getSnapshot())]);
+    const withHazard = (state: "idle" | "warning" | "active") => ({
+      ...base,
+      phase: "playing" as const,
+      stage: {
+        ...base.stage,
+        hazards: [{ id: "gate", area: { x: 0, y: 60, width: 60, height: 120 }, color: "#ff3b3b", state, progress: 0 }],
+      },
+    });
+    // Left of the zone's centre: escape to the left.
+    expect(createCpuController(0, 3).next(withHazard("warning")).direction.x).toBe(-1);
+    expect(createCpuController(0, 1).next(withHazard("active")).direction.x).toBe(-1);
+    // Level 1 does not read the warning yet; nobody reacts to an idle zone.
+    const relaxed = createCpuController(0, 1, 7).next(withHazard("warning"));
+    const unaware = createCpuController(0, 1, 7).next(withHazard("idle"));
+    expect(relaxed.direction).toEqual(unaware.direction);
+  });
+
+  it("does not flee a hazard off the edge of the stage", () => {
+    // Default stage: the main platform spans x -710 to 710.
+    const game = createGame(config, {
+      countdownFrames: 0,
+      spawnPositions: [{ x: -650, y: 60 }, { x: 400, y: 60 }],
+    });
+    const base = game.step([createCpuController(0, 3).next(game.getSnapshot()), createCpuController(1, 1).next(game.getSnapshot())]);
+    const near = (state: "idle" | "active") => ({
+      ...base,
+      phase: "playing" as const,
+      stage: {
+        ...base.stage,
+        hazards: [{ id: "edge", area: { x: -600, y: 60, width: 60, height: 120 }, color: "#ff3b3b", state, progress: 0 }],
+      },
+    });
+    // Running left would leave the stage: the CPU plays on instead of fleeing.
+    expect(createCpuController(0, 3, 9).next(near("active")).direction)
+      .toEqual(createCpuController(0, 3, 9).next(near("idle")).direction);
+  });
+
   it("uses an upward special to recover from very low offstage", () => {
     const game = createGame(config, {
       countdownFrames: 0,

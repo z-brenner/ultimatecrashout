@@ -24,6 +24,13 @@ import {
 } from "./fighterBuilders";
 import { getStageDefinition, stageSurfaceYAt } from "./stages";
 import {
+  hazardOverlaps,
+  hazardPhase,
+  platformMotionPosition,
+  type HazardDefinition,
+  type PlatformMotion,
+} from "./stageMechanics.mjs";
+import {
   ITEM_DEFINITIONS,
   ITEM_KINDS,
   isAutomaticItem,
@@ -450,6 +457,17 @@ export interface PlatformSnapshot {
   height: number;
   kind: "ground" | "platform";
   surfaceY?: readonly [number, number];
+  /** Moves along a path; drawn by the game rather than baked into the arena art. */
+  motion?: PlatformMotion & { spriteUrl?: string };
+}
+
+export interface StageHazardSnapshot {
+  id: string;
+  area: HazardDefinition["area"];
+  color: string;
+  state: "idle" | "warning" | "active";
+  /** 0–1 through the current state. */
+  progress: number;
 }
 
 export interface StageLedgeSnapshot {
@@ -462,6 +480,8 @@ export interface StageSnapshot {
   id: StageId;
   platforms: readonly PlatformSnapshot[];
   ledges: readonly StageLedgeSnapshot[];
+  /** Empty when the match turns stage hazards off. */
+  hazards: readonly StageHazardSnapshot[];
   blastZone: { left: number; right: number; top: number; bottom: number };
 }
 
@@ -570,7 +590,7 @@ export interface GameEvent {
   /** Damage alias used by visual/audio feedback consumers. */
   damage?: number;
   /** Factual gameplay source used by audio and visual feedback. */
-  source?: "melee" | "projectile" | "throw" | "item";
+  source?: "melee" | "projectile" | "throw" | "item" | "hazard";
   /** Resulting launch velocity after DI, when the event moves a fighter. */
   velocity?: Vec2;
   /** Downward speed immediately before a landing collision. */
@@ -1083,7 +1103,13 @@ export class CombatGame {
   private readonly options: Required<Pick<GameOptions, "seed" | "countdownFrames">> &
     Pick<GameOptions, "spawnPositions">;
   private readonly random: SeededRandom;
-  private stage: StageSnapshot;
+  /** Hazards are not stored here: their state is derived per snapshot from `this.hazards`. */
+  private stage: Omit<StageSnapshot, "hazards">;
+  /** Moving platforms' positions on the previous frame, for landing sweeps. */
+  private platformPreviousPositions = new Map<string, Vec2>();
+  private hazards: readonly HazardDefinition[] = [];
+  /** Last hazard activation that hit each fighter, keyed `${hazardId}:${slot}`. */
+  private hazardHitCycles = new Map<string, number>();
   private fighters!: [FighterRuntime, FighterRuntime];
   private projectiles: ProjectileRuntime[] = [];
   private items: ItemRuntime[] = [];
@@ -1142,6 +1168,7 @@ export class CombatGame {
       return this.getSnapshot();
     }
 
+    this.updateMovingPlatforms();
     this.updateFighter(this.fighters[0], inputs[0], inputs);
     this.updateFighter(this.fighters[1], inputs[1], inputs);
     this.resolveFighterOverlap();
@@ -1149,6 +1176,7 @@ export class CombatGame {
     this.updateProjectiles(inputs);
     this.updateItems(inputs);
     this.maybeSpawnItem();
+    this.resolveHazards(inputs);
     this.resolveKnockouts();
     if (this.phase === "playing") this.resolveTimeLimit();
     return this.getSnapshot();
@@ -1219,6 +1247,10 @@ export class CombatGame {
           ...ledge,
           position: cloneVec(ledge.position),
         })),
+        hazards: this.hazards.map((hazard) => {
+          const phase = hazardPhase(hazard.schedule, this.playingFrames());
+          return { id: hazard.id, area: { ...hazard.area }, color: hazard.color, state: phase.state, progress: phase.progress };
+        }),
         blastZone: { ...this.stage.blastZone },
       },
       winner: this.winner,
@@ -1300,12 +1332,17 @@ export class CombatGame {
     this.nextItemFrame = this.config.items ? this.itemIntervalFrames() : Number.POSITIVE_INFINITY;
   }
 
-  private createStage(): StageSnapshot {
+  private createStage(): Omit<StageSnapshot, "hazards"> {
     const definition = getStageDefinition(this.config.stage);
-    const platforms = definition.platforms.map((platform) => ({
-      ...platform,
-      position: { x: platform.x, y: platform.y },
-    }));
+    const platforms = definition.platforms.map((platform) => {
+      const start = platform.motion ? platformMotionPosition(platform.motion, 0) : platform;
+      return { ...platform, x: start.x, y: start.y, position: { x: start.x, y: start.y } };
+    });
+    this.platformPreviousPositions = new Map(
+      platforms.filter(({ motion }) => motion).map(({ id, position }) => [id, cloneVec(position)]),
+    );
+    this.hazards = this.config.stageHazards === false ? [] : definition.hazards;
+    this.hazardHitCycles = new Map();
     const main = platforms.find((platform) => platform.id === "main");
     if (!main) throw new Error(`Stage ${definition.id} has no main platform.`);
     const ledges = definition.ledges.map((ledge) => {
@@ -2713,7 +2750,7 @@ export class CombatGame {
 
       for (const platform of this.stage.platforms) {
         if (platform.kind === "platform" && fighter.dropThroughFrames > 0) continue;
-        const previousTop = platformTop(platform, fighter.previousPosition.x);
+        const previousTop = this.previousPlatformTop(platform, fighter.previousPosition.x);
         const top = platformTop(platform, fighter.position.x);
         const withinHorizontal =
           fighter.position.x + fighter.definition.size.width * 0.26 >=
@@ -4008,7 +4045,8 @@ export class CombatGame {
 
   private applyLaunch(
     target: FighterRuntime,
-    attacker: FighterRuntime,
+    /** Null for stage hazards: the last fighter's KO credit is kept. */
+    attacker: FighterRuntime | null,
     damage: number,
     angleDegrees: number,
     baseKnockback: number,
@@ -4063,8 +4101,10 @@ export class CombatGame {
       minimumHitstun,
       meleeHitstunFrames(knockback),
     );
-    target.lastHitBy = attacker.slot;
-    target.lastHitFrames = 600;
+    if (attacker) {
+      target.lastHitBy = attacker.slot;
+      target.lastHitFrames = 600;
+    }
   }
 
   private spawnProjectile(
@@ -4758,7 +4798,7 @@ export class CombatGame {
 
       if (!item.grounded && !blockedByGroundVolume) {
         for (const platform of this.stage.platforms) {
-          const previousTop = platformTop(platform, previousX);
+          const previousTop = this.previousPlatformTop(platform, previousX);
           const top = platformTop(platform, item.position.x);
           const inX = platformContainsX(platform, item.position.x);
           if (inX && previousY - item.radius >= previousTop && item.position.y - item.radius <= top) {
@@ -5032,6 +5072,85 @@ export class CombatGame {
       winner = this.kos[0] >= this.kos[1] ? 0 : 1;
     }
     this.finishMatch(winner);
+  }
+
+  /**
+   * Moves platforms to their position for this frame and carries what stands
+   * on them. Runs before fighters update, so their own movement and landing
+   * sweeps see the platform where it is now.
+   */
+  private updateMovingPlatforms(): void {
+    const frame = this.playingFrames();
+    for (const platform of this.stage.platforms) {
+      if (!platform.motion) continue;
+      const previous = cloneVec(platform.position);
+      const next = platformMotionPosition(platform.motion, frame);
+      this.platformPreviousPositions.set(platform.id, previous);
+      platform.x = next.x;
+      platform.y = next.y;
+      platform.position = { x: next.x, y: next.y };
+      const dx = next.x - previous.x;
+      const dy = next.y - previous.y;
+      if (dx === 0 && dy === 0) continue;
+      for (const fighter of this.fighters) {
+        if (!fighter.grounded || fighter.supportPlatform !== platform.id) continue;
+        fighter.position.x += dx;
+        fighter.position.y += dy;
+      }
+      for (const item of this.items) {
+        if (!item.grounded || item.supportPlatform !== platform.id) continue;
+        item.position.x += dx;
+        item.position.y += dy;
+      }
+    }
+  }
+
+  /**
+   * A platform's top surface at `worldX` as it was on the previous frame. A
+   * rising platform would otherwise pass a falling fighter between two frames.
+   */
+  private previousPlatformTop(platform: PlatformSnapshot, worldX: number): number {
+    const previous = this.platformPreviousPositions.get(platform.id);
+    const top = platformTop(platform, worldX);
+    return previous ? top - (platform.position.y - previous.y) : top;
+  }
+
+  /**
+   * Each fighter inside an active hazard is launched once per activation.
+   * Hazards are environmental and unblockable by design: intangibility
+   * avoids them, but shields and super armor do not.
+   */
+  private resolveHazards(inputs: InputPair): void {
+    const frame = this.playingFrames();
+    for (const hazard of this.hazards) {
+      const phase = hazardPhase(hazard.schedule, frame);
+      if (phase.state !== "active") continue;
+      for (const fighter of this.fighters) {
+        const key = `${hazard.id}:${fighter.slot}`;
+        if (
+          this.hazardHitCycles.get(key) === phase.cycle ||
+          fighter.state === "ko" ||
+          fighter.respawnFrames > 0 ||
+          this.isIntangible(fighter)
+        ) continue;
+        const { width, height } = fighter.definition.size;
+        if (!hazardOverlaps(hazard.area, fighter.position, width / 2, height / 2)) continue;
+        this.hazardHitCycles.set(key, phase.cycle);
+        const { damage, angle, baseKnockback, knockbackGrowth, mirrorX } = hazard.hit;
+        const launchAngle = mirrorX && fighter.position.x < hazard.area.x ? 180 - angle : angle;
+        this.applyLaunch(fighter, null, damage, launchAngle, baseKnockback, knockbackGrowth, 12, inputs[fighter.slot]);
+        this.emit({
+          type: "hit",
+          target: fighter.slot,
+          position: cloneVec(fighter.position),
+          value: damage,
+          damage,
+          source: "hazard",
+          velocity: this.fighterWorldVelocity(fighter),
+          sound: "hit",
+        });
+      }
+    }
   }
 
   private playingFrames(): number {

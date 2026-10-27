@@ -41,6 +41,11 @@
           "minItems": 1,
           "items": { "$ref": "#/$defs/platform" }
         },
+        "hazards": {
+          "type": "array",
+          "maxItems": 6,
+          "items": { "$ref": "#/$defs/hazard" }
+        },
         "ledges": {
           "type": "array",
           "items": { "$ref": "#/$defs/ledge" }
@@ -130,7 +135,70 @@
           "minItems": 2,
           "maxItems": 2,
           "items": { "type": "number" }
+        },
+        "motion": { "$ref": "#/$defs/motion" }
+      }
+    },
+    "motion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "periodFrames"],
+      "description": "Moves a one-way platform along a path. Its x/y must equal the frame-0 position; it is drawn by the game, not baked into the arena art; it may move at most 12 world units per frame.",
+      "properties": {
+        "path": { "type": "array", "minItems": 2, "maxItems": 8, "items": { "$ref": "#/$defs/point" } },
+        "periodFrames": { "type": "integer", "minimum": 60, "maximum": 3600 },
+        "mode": { "enum": ["pingpong", "loop"], "default": "pingpong" },
+        "easing": { "enum": ["linear", "sine"], "default": "linear", "description": "Ping-pong only." },
+        "phaseFrames": { "type": "integer", "minimum": 0, "description": "Less than periodFrames." },
+        "sprite": {
+          "$ref": "#/$defs/assetPath",
+          "description": "Image at the arena's pixel scale, top centre on the platform surface. Without one, a slab in the stage colours is drawn."
         }
+      }
+    },
+    "hazard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "area", "schedule", "hit", "color"],
+      "description": "A zone that idles, warns, then launches fighters inside it once per activation.",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "kind": { "const": "zone" },
+        "area": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x", "y", "width", "height"],
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" },
+            "width": { "type": "number", "minimum": 16 },
+            "height": { "type": "number", "minimum": 16 }
+          }
+        },
+        "schedule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["periodFrames", "warningFrames", "activeFrames"],
+          "properties": {
+            "periodFrames": { "type": "integer", "minimum": 60, "maximum": 3600 },
+            "warningFrames": { "type": "integer", "minimum": 30 },
+            "activeFrames": { "type": "integer", "minimum": 1 },
+            "phaseFrames": { "type": "integer", "minimum": 0, "description": "Less than periodFrames." }
+          }
+        },
+        "hit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["damage", "angle", "baseKnockback", "knockbackGrowth"],
+          "properties": {
+            "damage": { "type": "number", "minimum": 0, "maximum": 40 },
+            "angle": { "type": "number", "minimum": 0, "exclusiveMaximum": 360 },
+            "baseKnockback": { "type": "number", "minimum": 0 },
+            "knockbackGrowth": { "type": "number", "minimum": 0, "maximum": 3 },
+            "mirrorX": { "type": "boolean", "description": "Mirror the angle for fighters left of the zone's centre." }
+          }
+        },
+        "color": { "$ref": "#/$defs/color" }
       }
     },
     "ledge": {

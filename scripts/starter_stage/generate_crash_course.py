@@ -3,7 +3,9 @@
 
 Draws a crash-test facility to match the platform geometry in
 stages/crash-course/stage.json, then `npm run stage:build -- crash-course`
-derives the thumbnail and checksums.
+derives the thumbnail and checksums. Moving platforms are not baked into the
+arena: each gets its own sprite (motion.sprite), drawn by the game at the
+arena's pixel scale with its top row on the walking surface.
 
 Requires Python 3.9+ and Pillow:  python3 scripts/starter_stage/generate_crash_course.py
 """
@@ -97,23 +99,44 @@ def draw_platform(draw: ImageDraw.ImageDraw, stage: dict, platform: dict) -> Non
         target_marker(draw, (left + right) / 2, top + 155 * SS, 46 * SS)
         draw.line([left, top, right, top], fill=(220, 232, 245), width=4 * SS)
     else:
-        draw.rectangle([left, top, right, bottom + 10 * SS], fill=INK)
-        draw.rectangle([left + 4 * SS, top + 4 * SS, right - 4 * SS, bottom + 4 * SS], fill=YELLOW)
-        stripe = 18 * SS
-        for x in range(int(left) + 4 * SS, int(right) - 4 * SS, stripe * 2):
-            draw.polygon([(x, bottom + 4 * SS), (x + stripe, bottom + 4 * SS), (x + stripe * 2, top + 4 * SS), (x + stripe, top + 4 * SS)],
-                         fill=INK)
-        draw.line([left, top, right, top], fill=(255, 245, 210), width=4 * SS)
+        draw_slab(draw, left, top, right, bottom)
         # Support cables up to the light rig.
         for x in (left + 24 * SS, right - 24 * SS):
             draw.line([x, top, x, 120 * SS], fill=(90, 104, 126), width=3 * SS)
+
+
+def draw_slab(draw: ImageDraw.ImageDraw, left: float, top: float, right: float, bottom: float) -> None:
+    """A one-way platform: yellow hazard stripes in an ink frame."""
+    draw.rectangle([left, top, right, bottom + 10 * SS], fill=INK)
+    draw.rectangle([left + 4 * SS, top + 4 * SS, right - 4 * SS, bottom + 4 * SS], fill=YELLOW)
+    stripe = 18 * SS
+    for x in range(int(left) + 4 * SS, int(right) - 4 * SS, stripe * 2):
+        draw.polygon([(x, bottom + 4 * SS), (x + stripe, bottom + 4 * SS), (x + stripe * 2, top + 4 * SS), (x + stripe, top + 4 * SS)],
+                     fill=INK)
+    draw.line([left, top, right, top], fill=(255, 245, 210), width=4 * SS)
+
+
+def platform_sprite(stage: dict, platform: dict) -> Image.Image:
+    """A moving platform at the arena's pixel scale; its top row is the walking surface."""
+    unit = stage["render"]["art"]["worldUnitsPerPixel"]
+    width = round(platform["width"] / unit) * SS
+    height = round(platform["height"] / unit) * SS
+    lights = 14 * SS
+    image = Image.new("RGBA", (width, height + 10 * SS + lights), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    draw_slab(draw, 0, 0, width - 1, height)
+    # Motor housings with coral running lights instead of ceiling cables.
+    for x in (36 * SS, width - 36 * SS):
+        draw.rectangle([x - 16 * SS, height + 10 * SS, x + 16 * SS, height + 10 * SS + lights * 0.55], fill=INK)
+        draw.ellipse([x - 6 * SS, height + 12 * SS, x + 6 * SS, height + 12 * SS + lights * 0.75], fill=CORAL)
+    return image.resize((image.width // SS, image.height // SS), Image.Resampling.LANCZOS)
 
 
 def arena(stage: dict, base: Image.Image) -> Image.Image:
     image = base.copy()
     draw = ImageDraw.Draw(image)
     for platform in stage["gameplay"]["platforms"]:
-        if platform["kind"] != "ground":
+        if platform["kind"] != "ground" and "motion" not in platform:
             draw_platform(draw, stage, platform)
     for platform in stage["gameplay"]["platforms"]:
         if platform["kind"] == "ground":
@@ -130,7 +153,17 @@ def main() -> int:
     base.resize((W, H), Image.Resampling.LANCZOS).save(assets / "backdrop.webp", lossless=False, quality=86, method=6)
     full_small = full.resize((W, H), Image.Resampling.LANCZOS)
     full_small.save(assets / "arena.webp", lossless=False, quality=88, method=6)
-    full_small.convert("RGBA").save(assets / "preview.png", optimize=True)
+    preview = full_small.convert("RGBA")
+    for platform in stage["gameplay"]["platforms"]:
+        motion = platform.get("motion")
+        if not motion:
+            continue
+        sprite = platform_sprite(stage, platform)
+        sprite.save(ROOT / motion["sprite"], optimize=True)
+        # The preview shows the platform where it starts (stage.json x/y).
+        left, top = to_px(stage, platform["x"], platform["y"] + platform["height"] / 2)
+        preview.alpha_composite(sprite, (round(left / SS - sprite.width / 2), round(top / SS)))
+    preview.save(assets / "preview.png", optimize=True)
     print(f"Wrote Crash Course art to {assets}")
     return 0
 

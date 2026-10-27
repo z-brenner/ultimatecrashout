@@ -543,7 +543,32 @@ export class TestLabController {
       return `<circle cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="5" data-stage-ledge="${escapeHtml(`${ledge.platformId}:${ledge.side}`)}" class="is-ledge" />`;
     }).join("");
 
-    return surfaces + ledges;
+    // Moving platforms: the centre's path. Hazards: their zones.
+    const paths = definition.platforms.map((platform) => {
+      if (!platform.motion) return "";
+      const route = platform.motion.mode === "loop"
+        ? [...platform.motion.path, platform.motion.path[0]!]
+        : platform.motion.path;
+      // Drawn at the walking surface, like the surface lines next to it.
+      const points = route
+        .map((point) => stageWorldToPixel(stage, { x: point.x, y: point.y + platform.height / 2 }))
+        .map(({ x, y }) => `${x.toFixed(2)},${y.toFixed(2)}`)
+        .join(" ");
+      return `<polyline points="${points}" data-stage-path="${escapeHtml(platform.id)}" class="is-path" />`;
+    }).join("");
+    const hazards = definition.hazards.map((hazard) => {
+      const topLeft = stageWorldToPixel(stage, {
+        x: hazard.area.x - hazard.area.width / 2,
+        y: hazard.area.y + hazard.area.height / 2,
+      });
+      const bottomRight = stageWorldToPixel(stage, {
+        x: hazard.area.x + hazard.area.width / 2,
+        y: hazard.area.y - hazard.area.height / 2,
+      });
+      return `<rect x="${topLeft.x.toFixed(2)}" y="${topLeft.y.toFixed(2)}" width="${(bottomRight.x - topLeft.x).toFixed(2)}" height="${(bottomRight.y - topLeft.y).toFixed(2)}" data-stage-hazard="${escapeHtml(hazard.id)}" class="is-hazard" />`;
+    }).join("");
+
+    return surfaces + paths + hazards + ledges;
   }
 
   private updateItemPreview(): void {

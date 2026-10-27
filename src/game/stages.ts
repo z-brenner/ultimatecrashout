@@ -1,4 +1,5 @@
 import type { StageId } from "./contracts";
+import type { HazardDefinition, PlatformMotion } from "./stageMechanics.mjs";
 import {
   DEFAULT_STAGE_ID as DEFAULT_OPEN_STAGE_ID,
   OPEN_STAGE_IDS,
@@ -22,6 +23,11 @@ export interface StagePlatformDefinition {
   kind: "ground" | "platform";
   /** Playable surface height at the left and right edge, in world units. */
   surfaceY?: readonly [number, number];
+  /**
+   * A one-way platform that moves along a path. It is not part of the arena
+   * art; the game draws it (from `spriteUrl`, or as a slab in stage colours).
+   */
+  motion?: PlatformMotion & { spriteUrl?: string };
 }
 
 export interface StageLedgeDefinition {
@@ -54,6 +60,8 @@ export interface StageDefinition {
   art: StageArtCalibration;
   platforms: readonly StagePlatformDefinition[];
   ledges: readonly StageLedgeDefinition[];
+  /** Zones that periodically warn, then launch fighters inside them. */
+  hazards: readonly HazardDefinition[];
   spawns: readonly [{ x: number; y: number }, { x: number; y: number }];
   blastZone: Readonly<{ left: number; right: number; top: number; bottom: number }>;
   colors: Readonly<{ edge: string; surface: string; body: string; shadow: string }>;
@@ -79,6 +87,7 @@ interface GeneratedStagePack {
   readonly gameplay: Readonly<{
     platforms: readonly StagePlatformDefinition[];
     ledges: readonly StageLedgeDefinition[];
+    hazards?: readonly HazardDefinition[];
     spawns: readonly [{ x: number; y: number }, { x: number; y: number }];
     blastZone: StageDefinition["blastZone"];
   }>;
@@ -99,6 +108,8 @@ interface GeneratedStagePack {
     arenaUrl: string;
     backdropUrl: string;
     sceneUrl?: string;
+    /** Moving-platform sprites, by platform id. */
+    spriteUrls?: Readonly<Record<string, string>>;
   }>;
 }
 
@@ -122,8 +133,12 @@ const openStageDefinitions = generatedStagePacks.map((pack): StageDefinition => 
     },
   } : {}),
   art: pack.render.art,
-  platforms: pack.gameplay.platforms,
+  platforms: pack.gameplay.platforms.map((platform) => {
+    const spriteUrl = pack.runtime.spriteUrls?.[platform.id];
+    return platform.motion && spriteUrl ? { ...platform, motion: { ...platform.motion, spriteUrl } } : platform;
+  }),
   ledges: pack.gameplay.ledges,
+  hazards: pack.gameplay.hazards ?? [],
   spawns: pack.gameplay.spawns,
   blastZone: pack.gameplay.blastZone,
   colors: pack.colors,

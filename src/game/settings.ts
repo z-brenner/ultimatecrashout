@@ -28,6 +28,7 @@ const DEFAULT_VALUES: GameSettings = {
   flashes: 0.75,
   items: true,
   itemFrequency: "medium",
+  stageHazards: true,
   bindings: [{ ...DEFAULT_BINDINGS[0] }, { ...DEFAULT_BINDINGS[1] }],
   tutorialSeen: false,
 };
@@ -100,6 +101,8 @@ export function sanitizeSettings(value: unknown): GameSettings {
     items:
       typeof value.items === "boolean" ? value.items : DEFAULT_VALUES.items,
     itemFrequency,
+    stageHazards:
+      typeof value.stageHazards === "boolean" ? value.stageHazards : DEFAULT_VALUES.stageHazards,
     bindings: [
       sanitizeBinding(rawBindings[0], DEFAULT_VALUES.bindings[0]),
       sanitizeBinding(rawBindings[1], DEFAULT_VALUES.bindings[1]),

@@ -5,6 +5,7 @@
     "thumbnail": 307200,
     "arena": 8388608,
     "backdrop": 8388608,
-    "scene": 25165824
+    "scene": 25165824,
+    "sprite": 524288
   }
 }

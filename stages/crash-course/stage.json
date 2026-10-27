@@ -7,7 +7,7 @@
   "identity": {
     "displayName": "Crash Course",
     "series": "Ultimate Crashout",
-    "description": "A wide crash-test hangar floor with three suspended hazard platforms"
+    "description": "A crash-test hangar: a motorised platform rides overhead, and a laser gate between the side platforms fires on a timer"
   },
   "gameplay": {
     "platforms": [
@@ -37,11 +37,26 @@
       },
       {
         "id": "top",
-        "x": 0,
+        "x": -260,
         "y": 330,
         "width": 300,
         "height": 24,
-        "kind": "platform"
+        "kind": "platform",
+        "motion": {
+          "path": [
+            {
+              "x": -260,
+              "y": 330
+            },
+            {
+              "x": 260,
+              "y": 330
+            }
+          ],
+          "periodFrames": 480,
+          "easing": "sine",
+          "sprite": "assets/top-platform.png"
+        }
       }
     ],
     "ledges": [
@@ -52,6 +67,32 @@
       {
         "platformId": "main",
         "side": "right"
+      }
+    ],
+    "hazards": [
+      {
+        "id": "laser-gate",
+        "kind": "zone",
+        "area": {
+          "x": 0,
+          "y": 125,
+          "width": 36,
+          "height": 250
+        },
+        "schedule": {
+          "periodFrames": 900,
+          "warningFrames": 90,
+          "activeFrames": 60,
+          "phaseFrames": 300
+        },
+        "hit": {
+          "damage": 14,
+          "angle": 60,
+          "baseKnockback": 55,
+          "knockbackGrowth": 0.75,
+          "mirrorX": true
+        },
+        "color": "#ff3b3b"
       }
     ],
     "spawns": [

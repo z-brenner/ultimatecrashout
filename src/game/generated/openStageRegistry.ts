@@ -7,6 +7,7 @@ import stage1PreviewUrl from "../../../stages/crash-course/assets/preview.png?ur
 import stage1ThumbnailUrl from "../../../stages/crash-course/assets/preview.thumb.webp?url";
 import stage1ArenaUrl from "../../../stages/crash-course/assets/arena.webp?url";
 import stage1BackdropUrl from "../../../stages/crash-course/assets/backdrop.webp?url";
+import stage1Sprite0Url from "../../../stages/crash-course/assets/top-platform.png?url";
 
 export const OPEN_STAGE_IDS = [
   "verdant-grove",
@@ -131,7 +132,7 @@ export const OPEN_STAGE_PACKS = [
     "identity": {
       "displayName": "Crash Course",
       "series": "Ultimate Crashout",
-      "description": "A wide crash-test hangar floor with three suspended hazard platforms"
+      "description": "A crash-test hangar: a motorised platform rides overhead, and a laser gate between the side platforms fires on a timer"
     },
     "gameplay": {
       "platforms": [
@@ -161,11 +162,26 @@ export const OPEN_STAGE_PACKS = [
         },
         {
           "id": "top",
-          "x": 0,
+          "x": -260,
           "y": 330,
           "width": 300,
           "height": 24,
-          "kind": "platform"
+          "kind": "platform",
+          "motion": {
+            "path": [
+              {
+                "x": -260,
+                "y": 330
+              },
+              {
+                "x": 260,
+                "y": 330
+              }
+            ],
+            "periodFrames": 480,
+            "easing": "sine",
+            "sprite": "assets/top-platform.png"
+          }
         }
       ],
       "ledges": [
@@ -176,6 +192,32 @@ export const OPEN_STAGE_PACKS = [
         {
           "platformId": "main",
           "side": "right"
+        }
+      ],
+      "hazards": [
+        {
+          "id": "laser-gate",
+          "kind": "zone",
+          "area": {
+            "x": 0,
+            "y": 125,
+            "width": 36,
+            "height": 250
+          },
+          "schedule": {
+            "periodFrames": 900,
+            "warningFrames": 90,
+            "activeFrames": 60,
+            "phaseFrames": 300
+          },
+          "hit": {
+            "damage": 14,
+            "angle": 60,
+            "baseKnockback": 55,
+            "knockbackGrowth": 0.75,
+            "mirrorX": true
+          },
+          "color": "#ff3b3b"
         }
       ],
       "spawns": [
@@ -227,7 +269,10 @@ export const OPEN_STAGE_PACKS = [
       "previewUrl": stage1PreviewUrl,
       "thumbnailUrl": stage1ThumbnailUrl,
       "arenaUrl": stage1ArenaUrl,
-      "backdropUrl": stage1BackdropUrl
+      "backdropUrl": stage1BackdropUrl,
+      "spriteUrls": {
+        "top": stage1Sprite0Url
+      }
     }
   }
 ] as const;
