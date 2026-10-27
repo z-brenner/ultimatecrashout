@@ -14,6 +14,11 @@ import {
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { holdContentBuildLock } from "./content_build_lock.mjs";
+import {
+  STAGE_MECHANICS_LIMITS as LIMITS,
+  platformMotionMaxSpeed,
+  platformMotionPosition,
+} from "../src/game/stageMechanics.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packRoot = resolve(process.env.STAGE_PACKS_ROOT ?? join(projectRoot, "stages"));
@@ -99,6 +104,98 @@ const validateAsset = async (
   return absolute;
 };
 
+const integerInRange = (value, minimum, maximum) =>
+  Number.isInteger(value) && value >= minimum && value <= maximum;
+
+const onlyKeys = (value, allowed, label) => {
+  for (const key of Object.keys(value)) {
+    assert(allowed.includes(key), `${label}.${key} is not a known field (${allowed.join(", ")})`);
+  }
+};
+
+/** A moving one-way platform; returns every position it occupies, for the blast-zone check. */
+const validateMotion = (id, platform) => {
+  const label = `${id}: ${platform.id}.motion`;
+  const { motion } = platform;
+  assert(isObject(motion), `${label} must be an object`);
+  onlyKeys(motion, ["path", "periodFrames", "mode", "easing", "phaseFrames", "sprite"], label);
+  assert(platform.kind === "platform" && platform.id !== "main",
+    `${label}: only one-way platforms (kind "platform") can move; ground, main, and ledges stay put`);
+  assert(platform.surfaceY === undefined, `${label}: a moving platform must be flat (no surfaceY)`);
+  assert(Array.isArray(motion.path) && motion.path.length >= 2 && motion.path.length <= LIMITS.maxPathPoints,
+    `${label}.path must list 2-${LIMITS.maxPathPoints} points`);
+  motion.path.forEach((point, index) => validatePoint(point, `${label}.path[${index}]`));
+  assert(integerInRange(motion.periodFrames, LIMITS.minPeriodFrames, LIMITS.maxPeriodFrames),
+    `${label}.periodFrames must be an integer from ${LIMITS.minPeriodFrames} to ${LIMITS.maxPeriodFrames}`);
+  assert(motion.mode === undefined || motion.mode === "pingpong" || motion.mode === "loop",
+    `${label}.mode must be "pingpong" or "loop"`);
+  assert(motion.easing === undefined || motion.easing === "linear" || motion.easing === "sine",
+    `${label}.easing must be "linear" or "sine"`);
+  assert(motion.easing !== "sine" || motion.mode !== "loop", `${label}: sine easing only applies to pingpong`);
+  assert(motion.phaseFrames === undefined || integerInRange(motion.phaseFrames, 0, motion.periodFrames - 1),
+    `${label}.phaseFrames must be an integer from 0 to periodFrames - 1`);
+  const start = platformMotionPosition(motion, 0);
+  assert(Math.abs(start.x - platform.x) <= 0.5 && Math.abs(start.y - platform.y) <= 0.5,
+    `${label}: ${platform.id}.x/y must be where the motion starts on frame 0 ` +
+    `(${Math.round(start.x * 10) / 10}, ${Math.round(start.y * 10) / 10})`);
+  const speed = platformMotionMaxSpeed(motion);
+  assert(speed <= LIMITS.maxPlatformSpeed,
+    `${label} moves up to ${speed.toFixed(1)} units per frame; the limit is ${LIMITS.maxPlatformSpeed} ` +
+    "(lengthen periodFrames or shorten the path)");
+  return motion.path;
+};
+
+const validateHazards = (id, hazards, blast) => {
+  assert(Array.isArray(hazards) && hazards.length <= LIMITS.maxHazards,
+    `${id}: gameplay.hazards must be a list of at most ${LIMITS.maxHazards} hazards`);
+  const ids = new Set();
+  hazards.forEach((hazard, index) => {
+    const label = `${id}: gameplay.hazards[${index}]`;
+    assert(isObject(hazard), `${label} must be an object`);
+    onlyKeys(hazard, ["id", "kind", "area", "schedule", "hit", "color"], label);
+    assert(nonEmpty(hazard.id) && ID_PATTERN.test(hazard.id), `${label}.id must be a lowercase kebab-case id`);
+    assert(!ids.has(hazard.id), `${label}.id ${hazard.id} is used twice`);
+    ids.add(hazard.id);
+    assert(hazard.kind === "zone", `${label}.kind must be "zone"`);
+
+    const { area } = hazard;
+    assert(isObject(area), `${label}.area must be an object`);
+    onlyKeys(area, ["x", "y", "width", "height"], `${label}.area`);
+    assert(finite(area.x) && finite(area.y), `${label}.area needs finite x and y (its centre)`);
+    assert(finite(area.width) && area.width >= LIMITS.minHazardSize &&
+      finite(area.height) && area.height >= LIMITS.minHazardSize,
+      `${label}.area width and height must be at least ${LIMITS.minHazardSize}`);
+    assert(area.x - area.width / 2 > blast.left && area.x + area.width / 2 < blast.right &&
+      area.y - area.height / 2 > blast.bottom && area.y + area.height / 2 < blast.top,
+      `${label}.area must lie inside the blastZone`);
+
+    const { schedule } = hazard;
+    assert(isObject(schedule), `${label}.schedule must be an object`);
+    onlyKeys(schedule, ["periodFrames", "warningFrames", "activeFrames", "phaseFrames"], `${label}.schedule`);
+    assert(integerInRange(schedule.periodFrames, LIMITS.minPeriodFrames, LIMITS.maxPeriodFrames),
+      `${label}.schedule.periodFrames must be an integer from ${LIMITS.minPeriodFrames} to ${LIMITS.maxPeriodFrames}`);
+    assert(Number.isInteger(schedule.warningFrames) && schedule.warningFrames >= LIMITS.minWarningFrames,
+      `${label}.schedule.warningFrames must be at least ${LIMITS.minWarningFrames}: players must see it coming`);
+    assert(positiveInteger(schedule.activeFrames), `${label}.schedule.activeFrames must be a positive integer`);
+    assert(schedule.warningFrames + schedule.activeFrames < schedule.periodFrames,
+      `${label}.schedule: warningFrames + activeFrames must be less than periodFrames`);
+    assert(schedule.phaseFrames === undefined || integerInRange(schedule.phaseFrames, 0, schedule.periodFrames - 1),
+      `${label}.schedule.phaseFrames must be an integer from 0 to periodFrames - 1`);
+
+    const { hit } = hazard;
+    assert(isObject(hit), `${label}.hit must be an object`);
+    onlyKeys(hit, ["damage", "angle", "baseKnockback", "knockbackGrowth", "mirrorX"], `${label}.hit`);
+    assert(finite(hit.damage) && hit.damage >= 0 && hit.damage <= LIMITS.maxHazardDamage,
+      `${label}.hit.damage must be 0-${LIMITS.maxHazardDamage}`);
+    assert(finite(hit.angle) && hit.angle >= 0 && hit.angle < 360, `${label}.hit.angle must be 0-359 degrees`);
+    assert(finite(hit.baseKnockback) && hit.baseKnockback >= 0, `${label}.hit.baseKnockback must be a non-negative number`);
+    assert(finite(hit.knockbackGrowth) && hit.knockbackGrowth >= 0 && hit.knockbackGrowth <= 3,
+      `${label}.hit.knockbackGrowth must be 0-3`);
+    assert(hit.mirrorX === undefined || typeof hit.mirrorX === "boolean", `${label}.hit.mirrorX must be true or false`);
+    assert(COLOR_PATTERN.test(hazard.color ?? ""), `${label}.color must be a #rrggbb colour`);
+  });
+};
+
 const validateCommon = (pack, directoryName) => {
   assert(isObject(pack), `${directoryName}: stage.json must contain an object`);
   assert(pack.schemaVersion === 1, `${directoryName}: schemaVersion must equal 1`);
@@ -165,13 +262,18 @@ const validateReadyPack = async (pack, directory, config) => {
   }
   for (const platform of gameplay.platforms) {
     const halfWidth = platform.width / 2;
-    const fallbackSurface = platform.y + platform.height / 2;
-    const surfaces = platform.surfaceY ?? [fallbackSurface, fallbackSurface];
-    assert(platform.x - halfWidth > blast.left, `${id}: ${platform.id} exceeds the blastZone on the left`);
-    assert(platform.x + halfWidth < blast.right, `${id}: ${platform.id} exceeds the blastZone on the right`);
-    assert(Math.max(...surfaces) < blast.top, `${id}: ${platform.id} exceeds the blastZone at the top`);
-    assert(Math.min(...surfaces) - platform.height > blast.bottom, `${id}: ${platform.id} exceeds the blastZone at the bottom`);
+    // A moving platform must stay inside the blast zone at every path point.
+    const positions = platform.motion !== undefined ? validateMotion(id, platform) : [platform];
+    for (const position of positions) {
+      const fallbackSurface = position.y + platform.height / 2;
+      const surfaces = platform.surfaceY ?? [fallbackSurface, fallbackSurface];
+      assert(position.x - halfWidth > blast.left, `${id}: ${platform.id} exceeds the blastZone on the left`);
+      assert(position.x + halfWidth < blast.right, `${id}: ${platform.id} exceeds the blastZone on the right`);
+      assert(Math.max(...surfaces) < blast.top, `${id}: ${platform.id} exceeds the blastZone at the top`);
+      assert(Math.min(...surfaces) - platform.height > blast.bottom, `${id}: ${platform.id} exceeds the blastZone at the bottom`);
+    }
   }
+  if (gameplay.hazards !== undefined) validateHazards(id, gameplay.hazards, blast);
 
   assert(isObject(render), `${id}: render is missing`);
   assert(render.kind === "2d" || render.kind === "3d", `${id}: invalid render.kind`);
@@ -204,6 +306,15 @@ const validateReadyPack = async (pack, directory, config) => {
     arena: await validateAsset(directory, id, render.arena, "arena", IMAGE_EXTENSIONS, config.assetBudgets.arena, checksums),
     backdrop: await validateAsset(directory, id, render.backdrop, "backdrop", IMAGE_EXTENSIONS, config.assetBudgets.backdrop, checksums),
   };
+  // Moving-platform sprites, drawn at the arena's pixel scale.
+  const spritePaths = gameplay.platforms.flatMap((platform) =>
+    platform.motion?.sprite === undefined ? [] : [[platform.id, platform.motion.sprite]]);
+  assets.sprites = {};
+  for (const [platformId, spritePath] of spritePaths) {
+    assets.sprites[platformId] = await validateAsset(
+      directory, id, spritePath, `${platformId}.motion.sprite`, IMAGE_EXTENSIONS, config.assetBudgets.sprite, checksums,
+    );
+  }
   if (render.kind === "3d") {
     assets.scene = await validateAsset(
       directory,
@@ -224,6 +335,7 @@ const validateReadyPack = async (pack, directory, config) => {
     render.arena,
     render.backdrop,
     ...(render.kind === "3d" ? [render.scene.file] : []),
+    ...spritePaths.map(([, spritePath]) => spritePath),
   ]);
   for (const checksumPath of checksums.keys()) {
     assert(expectedChecksums.has(checksumPath), `${id}: unexpected checksum ${checksumPath}`);
@@ -235,7 +347,7 @@ const loadPacks = async () => {
   const config = await readJson(pipelineConfigPath);
   assert(config.version === 1, "stages/pipeline.config.json: invalid version");
   assert(isObject(config.assetBudgets), "stages/pipeline.config.json: assetBudgets is missing");
-  for (const key of ["preview", "thumbnail", "arena", "backdrop", "scene"]) {
+  for (const key of ["preview", "thumbnail", "arena", "backdrop", "scene", "sprite"]) {
     assert(positiveInteger(config.assetBudgets[key]), `stages/pipeline.config.json: invalid ${key} budget`);
   }
   const directories = (await readdir(packRoot, { withFileTypes: true }))
@@ -275,6 +387,17 @@ const generatedRegistry = (loaded) => {
       if (!importPath.startsWith(".")) importPath = `./${importPath}`;
       imports.push(`import ${identifier} from ${JSON.stringify(`${importPath}?url`)};`);
       runtime[`${key}Url`] = `__${identifier}__`;
+    }
+    const spriteEntries = Object.entries(assets.sprites ?? {});
+    if (spriteEntries.length > 0) {
+      runtime.spriteUrls = {};
+      spriteEntries.forEach(([platformId, absolute], spriteIndex) => {
+        const identifier = `stage${index}Sprite${spriteIndex}Url`;
+        let importPath = relative(dirname(registryOut), absolute).split(sep).join("/");
+        if (!importPath.startsWith(".")) importPath = `./${importPath}`;
+        imports.push(`import ${identifier} from ${JSON.stringify(`${importPath}?url`)};`);
+        runtime.spriteUrls[platformId] = `__${identifier}__`;
+      });
     }
     return { ...pack, runtime };
   });
@@ -404,7 +527,8 @@ const refreshPackAssets = async (id) => {
     "-quiet", "-q", "82", "-metadata", "none", "-resize", "512", "288", preview, "-o", thumbnail,
   ], { encoding: "utf8" });
   assert(encoded.status === 0, `${id}: thumbnail encoding failed\n${encoded.stderr ?? ""}`);
-  const assets = [render.preview, render.thumbnail, render.arena, render.backdrop, render.scene?.file]
+  const sprites = (pack.gameplay?.platforms ?? []).map((platform) => platform.motion?.sprite);
+  const assets = [render.preview, render.thumbnail, render.arena, render.backdrop, render.scene?.file, ...sprites]
     .filter(nonEmpty);
   const lines = [];
   for (const assetPath of [...new Set(assets)].sort()) {

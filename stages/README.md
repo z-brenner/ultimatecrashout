@@ -65,9 +65,66 @@ All four images are required for every pack. A 2D stage uses `arena` directly
 over `backdrop`. A 3D stage also provides `render.scene`; if WebGL or the GLB
 fails, the same images provide the fallback.
 
-Version 1 supports static stages only. Moving platforms, hazards, and arbitrary
-scripts require an audited engine mechanic; packs cannot provide executable
-code.
+Packs cannot provide executable code. Moving platforms and hazards are
+audited, data-driven engine mechanics (below); anything else needs a new one.
+
+## Moving platforms
+
+Give a one-way platform (`kind: "platform"`, not `main`) a `motion`:
+
+```json
+{ "id": "top", "x": -260, "y": 330, "width": 300, "height": 24, "kind": "platform",
+  "motion": {
+    "path": [{ "x": -260, "y": 330 }, { "x": 260, "y": 330 }],
+    "periodFrames": 480,
+    "easing": "sine",
+    "sprite": "assets/top-platform.png"
+  } }
+```
+
+- The centre travels the `path` (2-8 points) and back once per `periodFrames`
+  (`"mode": "pingpong"`, the default; `"easing": "sine"` slows into each
+  end), or around the path and straight back to its start (`"mode": "loop"`).
+  `phaseFrames` offsets the start. `x`/`y` must be where it is on frame 0.
+- Position depends only on the match frame, so matches replay identically.
+  Fighters and items standing on it ride along, and a platform rising into a
+  falling fighter catches them.
+- Limits keep it fair and robust: at most 12 world units per frame (the
+  build reports the actual peak), inside the blast zone along the whole path,
+  flat (no `surfaceY`), and never a ledge.
+- Leave moving platforms out of `arena`. The game draws `sprite` (in
+  `assets/`, at the arena's pixel scale, top row on the walking surface), or
+  a slab in the stage `colors` when there is none. List the sprite in
+  `SHA256SUMS`; `stage:build -- <id>` does that for you.
+
+## Hazards
+
+```json
+"hazards": [{
+  "id": "laser-gate",
+  "kind": "zone",
+  "area": { "x": 0, "y": 125, "width": 36, "height": 250 },
+  "schedule": { "periodFrames": 900, "warningFrames": 90, "activeFrames": 60, "phaseFrames": 300 },
+  "hit": { "damage": 14, "angle": 60, "baseKnockback": 55, "knockbackGrowth": 0.75, "mirrorX": true },
+  "color": "#ff3b3b"
+}]
+```
+
+- Each period ends with a visible warning (at least 30 frames) and then the
+  active window. A fighter inside the zone while it is active is launched
+  once per activation with the authored `hit` (`angle` in degrees, 0 = right,
+  90 = up; `mirrorX` launches fighters on the left side leftward).
+- Intangibility (dodges, respawn invincibility) avoids it; shields and super
+  armor do not. A hazard KO keeps the last attacker's KO credit.
+- Players can turn hazards off with the **Hazards** switch on the stage
+  select screen. Moving platforms always move: they are part of the layout.
+- CPU fighters step out of live zones; levels 2 and 3 already react to the
+  warning.
+
+Tune in the Lab: the **Collisions** overlay draws each moving platform's path
+and every hazard zone over the arena art. Crash Course (`crash-course/`) uses
+both mechanics; `scripts/starter_stage/generate_crash_course.py` draws its
+moving-platform sprite.
 
 ## License and provenance
 

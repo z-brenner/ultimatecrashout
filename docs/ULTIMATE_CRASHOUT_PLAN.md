@@ -117,7 +117,9 @@ Ordered by how much they constrain the goals.
 
 1. ~~Palette-swap skins at runtime~~ (done): `visual.skins`, recoloured in
    the browser; `npm run fighter:skins` suggests and previews them.
-2. Stage hazards and moving platforms as audited, data-driven mechanics.
+2. ~~Stage hazards and moving platforms~~ (done): `motion` on one-way
+   platforms and `hazards` zones in `stage.json`, validated, deterministic,
+   with a Hazards rule; Crash Course uses both.
 3. Per-fighter audio in the pack contract.
 4. N-player refactor (tuples → arrays) as its own PR series, with the engine
    tests as the safety net.

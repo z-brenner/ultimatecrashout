@@ -227,3 +227,38 @@ test.describe("skins", () => {
     expect(problems).toEqual([]);
   });
 });
+
+test.describe("stage mechanics", () => {
+  test("Crash Course moves its platform and cycles its laser gate", async ({ page }) => {
+    const problems = trackProblems(page);
+    await page.goto("./");
+    await page.locator("[data-ui-action='boot-skip']").click();
+    await expect(page.locator("[data-ui-action='title-start']")).toBeVisible();
+    await page.keyboard.press("Enter");
+    await page.locator("[data-ui-action='home-play']").click();
+    await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='0']").click();
+    await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='1']").click();
+    await page.locator("[data-ui-action='open-stage-select']").click();
+    await page.locator("[data-ui-action='select-stage'][data-stage='crash-course']").click();
+    await expect(page.locator("[data-ui-action='toggle-hazards']")).toHaveAttribute("aria-checked", "true");
+    await page.locator("[data-ui-action='stage-confirm']").click();
+    await waitForPlaying(page);
+
+    type StageState = { top: number; hazard: string | undefined };
+    const stage = () => page.evaluate((api) => {
+      const snapshot = (window as unknown as Record<string, {
+        getSnapshot(): { stage: { platforms: { id: string; x: number }[]; hazards: { state: string }[] } };
+      }>)[api]!.getSnapshot();
+      return {
+        top: snapshot.stage.platforms.find(({ id }) => id === "top")!.x,
+        hazard: snapshot.stage.hazards[0]?.state,
+      } satisfies StageState;
+    }, debugApi);
+    const start = await stage();
+    await expect.poll(async () => Math.abs((await stage()).top - start.top), { timeout: 5_000 }).toBeGreaterThan(40);
+    // The gate warns about 7.5 s into the match, then fires.
+    await expect.poll(async () => (await stage()).hazard, { timeout: 15_000, intervals: [100] }).toBe("warning");
+    await expect.poll(async () => (await stage()).hazard, { timeout: 5_000, intervals: [50] }).toBe("active");
+    expect(problems).toEqual([]);
+  });
+});

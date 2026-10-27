@@ -1,6 +1,8 @@
 import {
   fighterHurtboxProfile,
   type DebugHitbox,
+  type PlatformSnapshot,
+  type StageHazardSnapshot,
   type FighterSnapshot,
   type GameSnapshot,
   type ItemSnapshot,
@@ -501,6 +503,8 @@ export class GameRenderer {
   >();
   private readonly stageArt = new Map<StageId, HTMLImageElement>();
   private readonly stageBackdrops = new Map<StageId, HTMLImageElement>();
+  /** Moving-platform sprites, by URL. */
+  private readonly platformSprites = new Map<string, HTMLImageElement>();
   private readonly itemArt = new Map<ItemKind, HTMLImageElement>();
   private nativeStageRenderer?: ThreeStageRenderer;
   private nativeStageLoad?: Promise<void>;
@@ -566,8 +570,12 @@ export class GameRenderer {
         report("fighters");
       },
     });
-    const stageImages = [this.stageArt.get(stage), this.stageBackdrops.get(stage)]
-      .filter((image): image is HTMLImageElement => Boolean(image));
+    const stageImages = [
+      this.stageArt.get(stage),
+      this.stageBackdrops.get(stage),
+      ...getStageDefinition(stage).platforms.map(({ motion }) =>
+        motion?.spriteUrl ? this.platformSprites.get(motion.spriteUrl) : undefined),
+    ].filter((image): image is HTMLImageElement => Boolean(image));
     const stageLoads = stageImages.map(async (image) => {
       await waitForImage(image, options.signal);
       stageCompleted += 1;
@@ -641,6 +649,13 @@ export class GameRenderer {
       backdrop.fetchPriority = "high";
       backdrop.src = definition.backdropUrl;
       this.stageBackdrops.set(stage, backdrop);
+    }
+    for (const { motion } of definition.platforms) {
+      if (!motion?.spriteUrl || this.platformSprites.has(motion.spriteUrl)) continue;
+      const sprite = new Image();
+      sprite.decoding = "async";
+      sprite.src = motion.spriteUrl;
+      this.platformSprites.set(motion.spriteUrl, sprite);
     }
   }
 
@@ -897,6 +912,11 @@ export class GameRenderer {
 
   private drawWorld(snapshot: GameSnapshot, drawFlattenedStage = true): void {
     if (drawFlattenedStage) this.drawStage(snapshot);
+    // Over 2D art and 3D scenes alike: these parts are not in the stage art.
+    for (const hazard of snapshot.stage.hazards) this.drawHazard(hazard);
+    for (const platform of snapshot.stage.platforms) {
+      if (platform.motion) this.drawMovingPlatform(snapshot.stage.id, platform);
+    }
     this.effects.drawBehind(this.context, snapshot, this.effectView());
     for (const item of snapshot.items) this.drawItem(item);
     for (const projectile of snapshot.projectiles) this.drawProjectile(projectile);
@@ -932,6 +952,83 @@ export class GameRenderer {
     // beyond the capture, the dedicated stage backdrop remains visible rather
     // than stretched edge pixels that resemble a duplicated arena.
     ctx.drawImage(art, topLeft.x, topLeft.y, width, height);
+    ctx.restore();
+  }
+
+  /** World rectangle (centre and size) to a screen rectangle. */
+  private worldRect(x: number, y: number, width: number, height: number) {
+    const topLeft = this.worldToScreen({ x: x - width / 2, y: y + height / 2 });
+    return { x: topLeft.x, y: topLeft.y, width: width * this.camera.zoom, height: height * this.camera.zoom };
+  }
+
+  /**
+   * Idle: faint emitter caps, so players learn where hazards are. Warning: a
+   * pulsing outline that fills in. Active: a glowing beam in the hazard colour.
+   */
+  private drawHazard(hazard: StageHazardSnapshot): void {
+    const ctx = this.context;
+    const { x, y, width, height } = hazard.area;
+    const rect = this.worldRect(x, y, width, height);
+    const vertical = height >= width;
+    const cap = Math.max(4, 8 * this.camera.zoom);
+    ctx.save();
+    ctx.fillStyle = hazard.color;
+    ctx.globalAlpha = 0.45;
+    if (vertical) {
+      ctx.fillRect(rect.x - cap * 0.25, rect.y - cap, rect.width + cap * 0.5, cap);
+      ctx.fillRect(rect.x - cap * 0.25, rect.y + rect.height, rect.width + cap * 0.5, cap);
+    } else {
+      ctx.fillRect(rect.x - cap, rect.y - cap * 0.25, cap, rect.height + cap * 0.5);
+      ctx.fillRect(rect.x + rect.width, rect.y - cap * 0.25, cap, rect.height + cap * 0.5);
+    }
+    if (hazard.state === "warning") {
+      const pulse = 0.5 + 0.5 * Math.sin(this.elapsed * 18);
+      ctx.globalAlpha = 0.08 + hazard.progress * 0.2;
+      ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+      ctx.globalAlpha = 0.45 + pulse * 0.45;
+      ctx.strokeStyle = hazard.color;
+      ctx.lineWidth = Math.max(2, 3 * this.camera.zoom);
+      ctx.setLineDash([10 * this.camera.zoom, 8 * this.camera.zoom]);
+      ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+    } else if (hazard.state === "active") {
+      const flicker = 0.85 + 0.15 * Math.sin(this.elapsed * 60);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = 0.55 * flicker;
+      ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+      // A bright core along the zone's long axis.
+      ctx.fillStyle = "#ffffff";
+      ctx.globalAlpha = 0.5 * flicker;
+      if (vertical) ctx.fillRect(rect.x + rect.width * 0.35, rect.y, rect.width * 0.3, rect.height);
+      else ctx.fillRect(rect.x, rect.y + rect.height * 0.35, rect.width, rect.height * 0.3);
+    }
+    ctx.restore();
+  }
+
+  /** The pack's sprite at the arena's pixel scale, or a slab in the stage colours. */
+  private drawMovingPlatform(stage: StageId, platform: PlatformSnapshot): void {
+    const ctx = this.context;
+    const definition = getStageDefinition(stage);
+    const sprite = platform.motion?.spriteUrl ? this.platformSprites.get(platform.motion.spriteUrl) : undefined;
+    const surfaceY = platform.y + platform.height / 2;
+    if (sprite?.complete && sprite.naturalWidth > 0) {
+      const scale = definition.art.worldUnitsPerPixel;
+      const width = sprite.naturalWidth * scale;
+      const height = sprite.naturalHeight * scale;
+      const rect = this.worldRect(platform.x, surfaceY - height / 2, width, height);
+      ctx.drawImage(sprite, rect.x, rect.y, rect.width, rect.height);
+      return;
+    }
+    const rect = this.worldRect(platform.x, platform.y, platform.width, platform.height);
+    const lip = Math.max(2, 5 * this.camera.zoom);
+    ctx.save();
+    ctx.fillStyle = definition.colors.shadow;
+    ctx.fillRect(rect.x + lip, rect.y + lip, rect.width, rect.height);
+    ctx.fillStyle = definition.colors.body;
+    ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+    ctx.fillStyle = definition.colors.surface;
+    ctx.fillRect(rect.x, rect.y, rect.width, Math.min(rect.height, lip * 1.6));
+    ctx.fillStyle = definition.colors.edge;
+    ctx.fillRect(rect.x, rect.y, rect.width, Math.max(1.5, lip * 0.5));
     ctx.restore();
   }
 

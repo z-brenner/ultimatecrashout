@@ -433,6 +433,31 @@ describe("complete local UI flow", () => {
     mirrored.destroy();
   });
 
+  it("toggles stage hazards from the stage select and carries the rule into the match", () => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    const onSettingsChange = vi.fn();
+    const ui = new UIController(root, { onSettingsChange });
+
+    click(root, "[data-ui-action='boot-skip']");
+    click(root, "[data-ui-action='title-start']");
+    click(root, "[data-ui-action='home-play']");
+    click(root, "[data-ui-action='toggle-player-ready'][data-player-slot='0']");
+    click(root, "[data-ui-action='toggle-player-ready'][data-player-slot='1']");
+    click(root, "[data-ui-action='open-stage-select']");
+    click(root, "[data-ui-action='select-stage'][data-stage='crash-course']");
+    const toggle = () => root.querySelector<HTMLButtonElement>("[data-ui-action='toggle-hazards']")!;
+    expect(toggle().getAttribute("aria-checked")).toBe("true");
+    expect(ui.getMatchConfig().stageHazards).toBe(true);
+
+    toggle().click();
+    expect(toggle().getAttribute("aria-checked")).toBe("false");
+    expect(toggle().textContent).toContain("Off");
+    expect(ui.getMatchConfig().stageHazards).toBe(false);
+    expect(onSettingsChange).toHaveBeenLastCalledWith(expect.objectContaining({ stageHazards: false }));
+    ui.destroy();
+  });
+
   it("shows distinct AZERTY labels when capturing A/Q and Z/W", () => {
     const root = document.createElement("div");
     document.body.append(root);

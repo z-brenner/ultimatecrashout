@@ -606,6 +606,7 @@ export class UIController extends EventTarget {
       items: this.settings.items,
       itemFrequency: this.settings.itemFrequency,
       stage: this.selectedStage,
+      stageHazards: this.settings.stageHazards,
     };
   }
 
@@ -934,6 +935,8 @@ export class UIController extends EventTarget {
     const zoneWidth = selected.blastZone.right - selected.blastZone.left;
     const zoneLabel = zoneWidth >= 2_800 ? "Large" : zoneWidth <= 2_000 ? "Compact" : "Standard";
     const stageCount = String(STAGE_IDS.length).padStart(2, "0");
+    const movingCount = selected.platforms.filter(({ motion }) => motion).length;
+    const hazardNote = selected.hazards.length === 0 ? "None on this stage" : this.settings.stageHazards ? "On" : "Off";
     this.renderScreen(
       "stage-select",
       `
@@ -962,12 +965,16 @@ export class UIController extends EventTarget {
                 <span>${escapeHtml(selected.series)}</span>
                 <h2>${escapeHtml(selected.displayName)}</h2>
                 <p>${escapeHtml(selected.identity)}</p>
-                <dl><div><dt>Platforms</dt><dd>${selected.platforms.length}</dd></div><div><dt>Blast zone</dt><dd>${zoneLabel}</dd></div></dl>
+                <dl><div><dt>Platforms</dt><dd>${selected.platforms.length}</dd></div><div><dt>Moving</dt><dd>${movingCount || "None"}</dd></div><div><dt>Hazards</dt><dd>${selected.hazards.length || "None"}</dd></div><div><dt>Blast zone</dt><dd>${zoneLabel}</dd></div></dl>
               </div>
             </article>
           </div>
           <footer class="cc-stage-select-footer">
             <span><kbd>←</kbd><kbd>→</kbd> choose</span>
+            <button class="cc-switch cc-stage-hazards" type="button" role="switch" aria-checked="${this.settings.stageHazards}" data-ui-action="toggle-hazards">
+              <span class="cc-switch__track"><i></i></span>
+              <span><strong>Hazards</strong><small>${hazardNote}</small></span>
+            </button>
             <button class="cc-stage-launch" type="button" data-ui-action="stage-confirm"><span>Ready?</span><strong>Fight!</strong><small>${escapeHtml(selected.displayName)}</small></button>
           </footer>
         </section>`,
@@ -2119,6 +2126,11 @@ export class UIController extends EventTarget {
         this.settings.items = !this.settings.items;
         this.publishSettings();
         this.showCharacterSelect();
+        break;
+      case "toggle-hazards":
+        this.settings.stageHazards = !this.settings.stageHazards;
+        this.publishSettings();
+        this.showStageSelect();
         break;
       case "start-match":
         this.startMatch();

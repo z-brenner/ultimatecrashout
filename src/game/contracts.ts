@@ -73,6 +73,8 @@ export interface GameSettings {
   flashes: number;
   items: boolean;
   itemFrequency: "low" | "medium" | "high";
+  /** Stage hazard zones on stages that have them. */
+  stageHazards: boolean;
   bindings: [BindingMap, BindingMap];
   tutorialSeen: boolean;
 }
@@ -85,6 +87,8 @@ export interface MatchConfig {
   items: boolean;
   itemFrequency: GameSettings["itemFrequency"];
   stage: StageId;
+  /** Stage hazard zones; omitted means on. Moving platforms always move. */
+  stageHazards?: boolean;
 }
 
 export interface MatchResult {

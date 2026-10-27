@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   copyFileSync,
   cpSync,
@@ -102,6 +103,89 @@ describe("stage pack CLI", () => {
     writeFileSync(stagePath, `${JSON.stringify(stage, null, 2)}\n`);
 
     expect(() => runCli(workspace, "check")).toThrow(/Outdated registry/);
+  });
+
+  /** Verdant Grove with its top platform moving and a hazard; sprite optional. */
+  const writeMechanicsPack = (
+    workspace: ReturnType<typeof createWorkspace>,
+    edit: (gameplay: Record<string, unknown>) => void = () => undefined,
+    sprite = false,
+  ): void => {
+    const directory = join(workspace.packs, "verdant-grove");
+    const stagePath = join(directory, "stage.json");
+    const stage = JSON.parse(readFileSync(stagePath, "utf8"));
+    const top = stage.gameplay.platforms.find(({ id }: { id: string }) => id === "top");
+    top.motion = {
+      path: [{ x: 0, y: 317 }, { x: 0, y: 500 }],
+      periodFrames: 240,
+      easing: "sine",
+      ...(sprite ? { sprite: "assets/top.png" } : {}),
+    };
+    stage.gameplay.hazards = [{
+      id: "geyser",
+      kind: "zone",
+      area: { x: 0, y: 60, width: 80, height: 120 },
+      schedule: { periodFrames: 600, warningFrames: 60, activeFrames: 45 },
+      hit: { damage: 12, angle: 85, baseKnockback: 50, knockbackGrowth: 0.7, mirrorX: true },
+      color: "#4fd1ff",
+    }];
+    edit(stage.gameplay);
+    writeFileSync(stagePath, `${JSON.stringify(stage, null, 2)}\n`);
+    if (sprite) {
+      copyFileSync(join(directory, "assets/preview.png"), join(directory, "assets/top.png"));
+      const bytes = readFileSync(join(directory, "assets/top.png"));
+      const hash = createHash("sha256").update(bytes).digest("hex");
+      writeFileSync(join(directory, "SHA256SUMS"), `${readFileSync(join(directory, "SHA256SUMS"), "utf8")}${hash}  assets/top.png\n`);
+    }
+  };
+
+  it("accepts moving platforms, hazards, and platform sprites", () => {
+    const workspace = createWorkspace();
+    writeMechanicsPack(workspace, () => undefined, true);
+    runCli(workspace, "build");
+    const registry = readFileSync(workspace.registry, "utf8");
+    expect(registry).toContain('"periodFrames": 240');
+    expect(registry).toContain('"id": "geyser"');
+    expect(registry).toContain("verdant-grove/assets/top.png?url");
+    expect(registry).toMatch(/"spriteUrls": \{\s*"top": stage\d+Sprite0Url/);
+  });
+
+  type Platform = { id: string; motion?: Record<string, unknown>; [key: string]: unknown };
+  const top = (gameplay: Record<string, unknown>) =>
+    (gameplay.platforms as Platform[]).find(({ id }) => id === "top")!;
+  const hazard = (gameplay: Record<string, unknown>) =>
+    (gameplay.hazards as Record<string, Record<string, unknown>>[])[0]!;
+
+  it.each([
+    ["motion on ground", (g: Record<string, unknown>) => {
+      (g.platforms as Platform[])[0]!.motion = { path: [{ x: 0, y: -96 }, { x: 10, y: -96 }], periodFrames: 120 };
+    }, "only one-way platforms (kind \"platform\") can move"],
+    ["one path point", (g: Record<string, unknown>) => { top(g).motion!.path = [{ x: 0, y: 317 }]; }, "top.motion.path must list 2-8 points"],
+    ["start mismatch", (g: Record<string, unknown>) => { top(g).x = 50; }, "top.x/y must be where the motion starts on frame 0 (0, 317)"],
+    ["too fast", (g: Record<string, unknown>) => {
+      // 383 units each way in 30 frames, with sine easing peaking near 20 units a frame.
+      top(g).motion!.path = [{ x: 0, y: 317 }, { x: 0, y: 700 }];
+      top(g).motion!.periodFrames = 60;
+    }, "top.motion moves up to"],
+    ["leaves blast zone", (g: Record<string, unknown>) => {
+      top(g).motion!.path = [{ x: 0, y: 317 }, { x: 0, y: 1200 }];
+      top(g).motion!.periodFrames = 3600;
+    }, "top exceeds the blastZone at the top"],
+    ["sine loop", (g: Record<string, unknown>) => { top(g).motion!.mode = "loop"; }, "sine easing only applies to pingpong"],
+    ["unknown motion field", (g: Record<string, unknown>) => { top(g).motion!.speed = 3; }, "top.motion.speed is not a known field"],
+    ["no warning", (g: Record<string, unknown>) => { (hazard(g).schedule as Record<string, number>).warningFrames = 5; },
+      "gameplay.hazards[0].schedule.warningFrames must be at least 30"],
+    ["schedule overflow", (g: Record<string, unknown>) => { (hazard(g).schedule as Record<string, number>).activeFrames = 560; },
+      "warningFrames + activeFrames must be less than periodFrames"],
+    ["huge damage", (g: Record<string, unknown>) => { (hazard(g).hit as Record<string, number>).damage = 90; },
+      "gameplay.hazards[0].hit.damage must be 0-40"],
+    ["zone outside", (g: Record<string, unknown>) => { (hazard(g).area as Record<string, number>).x = 1300; },
+      "gameplay.hazards[0].area must lie inside the blastZone"],
+    ["bad colour", (g: Record<string, unknown>) => { hazard(g).color = "blue" as never; }, "gameplay.hazards[0].color must be a #rrggbb colour"],
+  ])("rejects invalid stage mechanics: %s", (_name, edit, message) => {
+    const workspace = createWorkspace();
+    writeMechanicsPack(workspace, edit);
+    expect(() => runCli(workspace, "build")).toThrow(message);
   });
 
   const hasCwebp = spawnSync("cwebp", ["-version"], { stdio: "ignore" }).status === 0;
