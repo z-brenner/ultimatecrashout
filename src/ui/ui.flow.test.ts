@@ -4,6 +4,7 @@ import { isFighterVisualReady } from "../game/characterAssets";
 import { OPEN_FIGHTER_IDS } from "../game/contracts";
 import { FIGHTER_IDS, getFighterDefinition } from "../game/roster";
 import { DEFAULT_STAGE_ID, getStageDefinition } from "../game/stages";
+import { damageColor } from "./hudDamage";
 import { UIController, type MatchLaunchContext } from "./ui";
 
 const OPEN_P1 = OPEN_FIGHTER_IDS[0];
@@ -35,6 +36,7 @@ describe("complete local UI flow", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
+    delete (HTMLElement.prototype as unknown as { animate?: unknown }).animate;
     document.body.innerHTML = "";
   });
 
@@ -281,6 +283,69 @@ describe("complete local UI flow", () => {
     expect(root.querySelector(".cc-hud")?.classList.contains("is-sudden-death")).toBe(true);
     expect(root.querySelector("[data-hud-announcement]")?.textContent).toBe("SUDDEN DEATH");
     expect(root.querySelector<HTMLElement>("[data-hud-timer]")?.hidden).toBe(true);
+    ui.destroy();
+  });
+
+  it("shows Smash-style damage, stock icons, and a jolt on each hit", () => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    const ui = new UIController(root);
+    const animate = vi.fn();
+    // Removed again in afterEach, even if this test fails.
+    (HTMLElement.prototype as unknown as { animate: unknown }).animate = animate;
+    click(root, "[data-ui-action='boot-skip']");
+    click(root, "[data-ui-action='title-start']");
+    ui.showHud({
+      players: [
+        { fighter: OPEN_P1, stocks: 3, damage: 0 },
+        { fighter: OPEN_P2, stocks: 3, damage: 0 },
+      ],
+    });
+    const panel = (slot: number) => root.querySelector<HTMLElement>(`[data-hud-player="${slot}"]`)!;
+    const damage = (slot: number) => panel(slot).querySelector<HTMLElement>("[data-hud-damage]")!;
+    const stockIcons = (slot: number) => panel(slot).querySelectorAll(".cc-hud-stock");
+    expect(stockIcons(0)).toHaveLength(3);
+    const firstIcon = stockIcons(1)[0];
+
+    const update = (p1: [number, number], p2: [number, number]) => ui.updateHud({
+      players: [
+        { fighter: OPEN_P1, stocks: p1[0], damage: p1[1] },
+        { fighter: OPEN_P2, stocks: p2[0], damage: p2[1] },
+      ],
+    });
+    update([3, 0], [3, 34.5]);
+    expect(damage(1).textContent?.replace(/\s+/g, "")).toBe("34.5%");
+    expect(damage(1).style.getPropertyValue("--cc-damage-color")).toBe(damageColor(34.5));
+    expect(animate).toHaveBeenCalledTimes(1);
+    // Unchanged stocks keep their icons: no flicker from re-rendering every frame.
+    expect(stockIcons(1)[0]).toBe(firstIcon);
+
+    update([3, 0], [3, 34.5]);
+    expect(animate).toHaveBeenCalledTimes(1);
+
+    // A KO drops a stock and resets damage without a jolt.
+    update([3, 0], [2, 0]);
+    expect(stockIcons(1)).toHaveLength(2);
+    expect(panel(1).querySelector("[data-hud-stocks]")?.getAttribute("aria-label")).toBe("2 stocks left");
+    expect(damage(1).textContent?.replace(/\s+/g, "")).toBe("0.0%");
+    expect(animate).toHaveBeenCalledTimes(1);
+
+    // Many stocks collapse to one icon and a count.
+    update([9, 0], [2, 0]);
+    expect(stockIcons(0)).toHaveLength(1);
+    expect(panel(0).querySelector(".cc-hud-stock-count")?.textContent).toBe("×9");
+
+    // A different skin redraws the whole panel, so portrait and stocks agree.
+    ui.updateHud({
+      players: [
+        { fighter: OPEN_P1, stocks: 9, damage: 0 },
+        { fighter: OPEN_P1, skin: "01", stocks: 2, damage: 0 },
+      ],
+    });
+    const arts = [...panel(1).querySelectorAll<HTMLImageElement>("img[data-portrait-art]")]
+      .map((image) => image.dataset.portraitArt);
+    expect(arts).toHaveLength(3);
+    expect(arts.every((art) => art?.includes(`/${OPEN_P1}/`))).toBe(true);
     ui.destroy();
   });
 
