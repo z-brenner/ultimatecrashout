@@ -262,3 +262,40 @@ test.describe("stage mechanics", () => {
     expect(problems).toEqual([]);
   });
 });
+
+test.describe("fighter audio", () => {
+  test("a fighter with its own sounds plays them, preloaded before the match", async ({ page }) => {
+    const problems = trackProblems(page);
+    // Record what the game plays and what it only preloads.
+    await page.addInitScript(() => {
+      const log = { played: [] as string[], loaded: [] as string[] };
+      (window as unknown as { audioLog: typeof log }).audioLog = log;
+      const { play, load } = HTMLMediaElement.prototype;
+      HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
+        log.played.push(this.src);
+        return play.call(this);
+      };
+      HTMLMediaElement.prototype.load = function (this: HTMLMediaElement) {
+        log.loaded.push(this.src);
+        return load.call(this);
+      };
+    });
+    await page.goto("./?match=buckle,rgs-stick&items=0");
+    await waitForPlaying(page);
+    const audioLog = () => page.evaluate(() => (window as unknown as { audioLog: { played: string[]; loaded: string[] } }).audioLog);
+    const ownCue = (cue: string) => (url: string) => new RegExp(`/${cue}-\\d-[\\w-]+\\.ogg$`).test(url);
+
+    const before = await audioLog();
+    // Every Buckle cue is fetched up front, and none has played yet.
+    expect(before.loaded.filter(ownCue("attack"))).toHaveLength(3);
+    expect(before.played.some(ownCue("attack"))).toBe(false);
+
+    await page.keyboard.press("KeyF");
+    await page.keyboard.press("KeyH");
+    await expect.poll(async () => {
+      const { played } = await audioLog();
+      return [played.some(ownCue("attack")), played.some(ownCue("jump"))];
+    }, { timeout: 3_000 }).toEqual([true, true]);
+    expect(problems).toEqual([]);
+  });
+});

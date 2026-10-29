@@ -81,7 +81,9 @@ Ordered by how much they constrain the goals.
     for a full visual redesign.
 13. **Pre-existing layout nits at 1280×720**: the player-name input overlaps the
     fighter epithet; the home "Rules" tile clips its text.
-14. **Audio is shared** by every fighter; packs cannot declare voices or SFX.
+14. ~~**Audio is shared** by every fighter.~~ Packs now declare their own
+    cues (`audio` in `fighter.json`); only Buckle has a set so far, and the
+    shared sounds are the fallback.
 15. ~~`website/` was the upstream marketing site.~~ Removed; GitHub Pages
     serves the game directly.
 16. **Tooling**: npm 10's resolver crashes ("Cannot read properties of null
@@ -120,7 +122,10 @@ Ordered by how much they constrain the goals.
 2. ~~Stage hazards and moving platforms~~ (done): `motion` on one-way
    platforms and `hazards` zones in `stage.json`, validated, deterministic,
    with a Hazards rule; Crash Course uses both.
-3. Per-fighter audio in the pack contract.
+3. ~~Per-fighter audio in the pack contract~~ (done): `audio.cues` in
+   `fighter.json` (attack, smash, special, jump, hurt, ko, taunt, victory,
+   announce) with random variants and shared fallbacks; Buckle has a full
+   synthesized set.
 4. N-player refactor (tuples → arrays) as its own PR series, with the engine
    tests as the safety net.
 

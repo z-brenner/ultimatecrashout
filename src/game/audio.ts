@@ -1,8 +1,6 @@
-import {
-  FIGHTER_IDS,
-  type FighterId,
-  type StageId,
-} from "./contracts";
+import type { FighterId, StageId } from "./contracts";
+import { pickVariant, type FighterAudioCueName } from "./fighterAudio.mjs";
+import { OPEN_FIGHTER_AUDIO } from "./generated/openFighterRegistry";
 import { ITEM_DEFINITIONS, type ItemKind } from "./items";
 import { DEFAULT_STAGE_ID, STAGE_IDS } from "./stages";
 import { publicAsset } from "./publicAsset";
@@ -18,7 +16,7 @@ export type SoundEffect =
   | "menu"
   | "countdown";
 
-export type FighterAudioCue = "attack" | "jump" | "victory";
+export type FighterAudioCue = FighterAudioCueName;
 
 export interface AudioVolumes {
   master: number;
@@ -31,6 +29,8 @@ export interface AudioEngineOptions {
   musicVolume?: number;
   effectsVolume?: number;
   audioFactory?: (source: string) => HTMLAudioElement | null;
+  /** Picks among a cue's variants; tests pass a seeded one. */
+  random?: () => number;
 }
 
 export interface SoundEffectOptions {
@@ -86,16 +86,51 @@ export const LOCAL_MUSIC_TRACKS: Readonly<Record<MusicTrackId, string>> = {
   ])),
 } as Readonly<Record<MusicTrackId, string>>;
 
-export const FIGHTER_AUDIO = Object.fromEntries(
-  FIGHTER_IDS.map((fighter) => [fighter, {
-    attack: LOCAL_AUDIO_SAMPLES.hitLight,
-    jump: LOCAL_AUDIO_SAMPLES.dodge,
-    victory: LOCAL_AUDIO_SAMPLES.gameSet,
-    announce: LOCAL_AUDIO_SAMPLES.ready,
-  }]),
-) as Readonly<
-  Record<FighterId, Readonly<Record<FighterAudioCue | "announce", string>>>
->;
+/** What a fighter without its own sound for a cue plays. Cues not listed stay silent. */
+const SHARED_FIGHTER_AUDIO: Partial<Record<FighterAudioCue, string>> = {
+  attack: LOCAL_AUDIO_SAMPLES.hitLight,
+  jump: LOCAL_AUDIO_SAMPLES.dodge,
+  victory: LOCAL_AUDIO_SAMPLES.gameSet,
+  announce: LOCAL_AUDIO_SAMPLES.ready,
+};
+
+/** Cues that borrow the fighter's own attack sound before any shared one. */
+const CUE_FALLBACK: Partial<Record<FighterAudioCue, FighterAudioCue>> = {
+  smash: "attack",
+  special: "attack",
+  taunt: "attack",
+};
+
+/** Playback gain and minimum gap between repeats (ms), per cue. */
+const CUE_PLAYBACK: Readonly<Record<FighterAudioCue, readonly [gain: number, gapMs: number]>> = {
+  attack: [0.78, 90],
+  smash: [0.9, 120],
+  special: [0.85, 120],
+  jump: [1, 0],
+  hurt: [0.9, 200],
+  ko: [1, 400],
+  taunt: [1, 300],
+  victory: [1, 500],
+  announce: [1, 250],
+};
+
+/**
+ * The files a cue can play for a fighter: the pack's own (fighter.json
+ * audio.cues), else its fallback cue's, else the shared sample, else none.
+ */
+export const fighterCueSources = (fighter: FighterId, cue: FighterAudioCue): readonly string[] => {
+  const own = OPEN_FIGHTER_AUDIO[fighter];
+  for (let current: FighterAudioCue | undefined = cue; current; current = CUE_FALLBACK[current]) {
+    const files = own?.[current];
+    if (files && files.length > 0) return files;
+  }
+  const shared = SHARED_FIGHTER_AUDIO[cue] ?? SHARED_FIGHTER_AUDIO[CUE_FALLBACK[cue] ?? cue];
+  return shared ? [shared] : [];
+};
+
+/** Every distinct file a fighter's cues can play, for preloading. */
+export const fighterAudioFiles = (fighter: FighterId): readonly string[] =>
+  [...new Set(Object.values(OPEN_FIGHTER_AUDIO[fighter] ?? {}).flat())];
 
 const ITEM_SAMPLE: Partial<Record<ItemKind, string>> = {
   "power-orb": LOCAL_AUDIO_SAMPLES.itemPower,
@@ -134,6 +169,9 @@ export class GameAudio {
   private localStatus: MenuStreamStatus = "idle";
   private disposed = false;
   private readonly lastCueAt = new Map<string, number>();
+  private readonly lastVariant = new Map<string, number>();
+  private readonly preloaded = new Map<string, HTMLAudioElement>();
+  private readonly random: () => number;
 
   constructor(options: AudioEngineOptions = {}) {
     this.volumes = {
@@ -142,6 +180,7 @@ export class GameAudio {
       effects: clamp(options.effectsVolume ?? 0.85),
     };
     this.audioFactory = options.audioFactory ?? defaultAudioFactory;
+    this.random = options.random ?? Math.random;
   }
 
   get musicMode(): MusicMode {
@@ -311,11 +350,33 @@ export class GameAudio {
   countdown(count: number): void { this.playSfx("countdown", { count }); }
 
   fighterCue(fighter: FighterId, cue: FighterAudioCue): void {
-    this.playSample(FIGHTER_AUDIO[fighter][cue], cue === "attack" ? 0.78 : 1, `${fighter}-${cue}`, cue === "attack" ? 90 : 0);
+    const sources = fighterCueSources(fighter, cue);
+    if (sources.length === 0) return;
+    const key = `${fighter}-${cue}`;
+    const [gain, gapMs] = CUE_PLAYBACK[cue];
+    const index = pickVariant(sources.length, this.lastVariant.get(key) ?? -1, this.random);
+    this.lastVariant.set(key, index);
+    this.playSample(sources[index]!, gain, key, gapMs);
   }
 
   announceFighter(fighter: FighterId): void {
-    this.playSample(FIGHTER_AUDIO[fighter].announce, 1, `announce-${fighter}`, 250);
+    this.fighterCue(fighter, "announce");
+  }
+
+  /**
+   * Starts fetching the fighters' own cue files, so the first swing of a
+   * match is not late. The shared samples are small and cached after one use.
+   */
+  preloadFighters(fighters: readonly FighterId[]): void {
+    if (this.disposed) return;
+    for (const source of fighters.flatMap(fighterAudioFiles)) {
+      if (this.preloaded.has(source)) continue;
+      const player = this.audioFactory(source);
+      if (!player) return;
+      player.preload = "auto";
+      player.load?.();
+      this.preloaded.set(source, player);
+    }
   }
 
   item(kind: ItemKind): void {

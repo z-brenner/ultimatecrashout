@@ -3,13 +3,14 @@
 import { spawnSync } from "node:child_process";
 import {
   access,
+  lstat,
   mkdir,
   readFile,
   readdir,
   rename,
   writeFile,
 } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { holdContentBuildLock } from "./content_build_lock.mjs";
 import {
@@ -18,6 +19,11 @@ import {
   isSwappableColor,
   parseHexColor,
 } from "../src/game/skinPalette.mjs";
+import {
+  FIGHTER_AUDIO_CUES,
+  FIGHTER_AUDIO_LIMITS,
+  audioMatchesExtension,
+} from "../src/game/fighterAudio.mjs";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packRoot = resolve(process.env.FIGHTER_PACKS_ROOT ?? join(projectRoot, "fighters"));
@@ -474,6 +480,58 @@ const validateSkins = (id, skins) => {
   });
 };
 
+/**
+ * The optional `audio` block: per-cue sound files inside the pack. Returns
+ * each cue's absolute file paths, for the registry's bundled imports.
+ */
+const validateAudio = async (pack, directory) => {
+  const { id, audio } = pack;
+  if (audio === undefined) return {};
+  const { maxVariants, maxFileBytes, maxPackBytes, extensions } = FIGHTER_AUDIO_LIMITS;
+  assert(isObject(audio), `${id}: audio must be an object`);
+  for (const key of Object.keys(audio)) {
+    assert(["attribution", "sourcePage", "license", "cues"].includes(key),
+      `${id}: audio.${key} is not an audio field (attribution, sourcePage, license, cues)`);
+  }
+  assert(nonEmpty(audio.attribution), `${id}: audio.attribution is missing (who made the sounds)`);
+  assert(audio.sourcePage === undefined || validUrl(audio.sourcePage), `${id}: invalid audio.sourcePage`);
+  assert(isObject(audio.license) && nonEmpty(audio.license.id), `${id}: audio.license.id is missing`);
+  assert(audio.license.url === undefined || validUrl(audio.license.url), `${id}: invalid audio.license.url`);
+  assert(isObject(audio.cues) && Object.keys(audio.cues).length > 0, `${id}: audio.cues must name at least one cue`);
+  const cueNames = Object.keys(FIGHTER_AUDIO_CUES);
+  const resolved = {};
+  const sizes = new Map();
+  for (const [cue, files] of Object.entries(audio.cues)) {
+    const where = `audio.cues.${cue}`;
+    assert(cueNames.includes(cue), `${id}: ${where} is not a cue (${cueNames.join(", ")})`);
+    assert(Array.isArray(files) && files.length >= 1 && files.length <= maxVariants,
+      `${id}: ${where} must list 1-${maxVariants} files (one plays at random)`);
+    assert(new Set(files).size === files.length, `${id}: ${where} lists a file twice`);
+    resolved[cue] = [];
+    for (const [index, file] of files.entries()) {
+      const at = `${where}[${index}]`;
+      assert(nonEmpty(file) && !isAbsolute(file) && !file.includes("\\"),
+        `${id}: ${at} must be a relative path with / separators`);
+      const absolute = resolve(directory, file);
+      assert(absolute.startsWith(`${directory}${sep}`), `${id}: ${at} escapes the fighter pack`);
+      const extension = extname(file).toLowerCase();
+      assert(extensions.includes(extension), `${id}: ${at} must be one of ${extensions.join(", ")}`);
+      const info = await lstat(absolute).catch(() => null);
+      assert(info?.isFile() && !info.isSymbolicLink(), `${id}: ${at} (${file}) is missing or not a regular file`);
+      assert(info.size <= maxFileBytes,
+        `${id}: ${file} is ${Math.ceil(info.size / 1024)} KiB; a cue file may be at most ${maxFileBytes / 1024} KiB`);
+      const bytes = await readFile(absolute);
+      assert(audioMatchesExtension(bytes, extension), `${id}: ${file} is not a valid ${extension} file`);
+      sizes.set(absolute, info.size);
+      resolved[cue].push(absolute);
+    }
+  }
+  const total = [...sizes.values()].reduce((sum, size) => sum + size, 0);
+  assert(total <= maxPackBytes,
+    `${id}: audio files total ${Math.ceil(total / 1024)} KiB; a pack may ship at most ${maxPackBytes / 1024} KiB`);
+  return resolved;
+};
+
 const loadPacks = async () => {
   const config = await readJson(pipelineConfigPath);
   assert(config.version === 1, "fighters/pipeline.config.json: invalid version");
@@ -496,8 +554,12 @@ const loadPacks = async () => {
           Object.keys(config.threeD.slotProfiles["platform-fighter"]),
         )
       : rawRender;
-    if (pack.status === "ready") validateReadyPack(pack, render, config);
-    loaded.push({ pack, render, directory });
+    let audio = {};
+    if (pack.status === "ready") {
+      validateReadyPack(pack, render, config);
+      audio = await validateAudio(pack, directory);
+    }
+    loaded.push({ pack, render, directory, audio });
   }
   const ids = loaded.map(({ pack }) => pack.id);
   const orders = loaded.filter(({ pack }) => pack.status === "ready").map(({ pack }) => pack.order);
@@ -512,13 +574,31 @@ const generatedOutputs = ({ config, loaded }) => {
   const packs = ready.map(({ pack }) => pack);
   const ids3D = packs.filter(({ kind }) => kind === "3d").map(({ id }) => id);
   const ids2D = packs.filter(({ kind }) => kind === "2d").map(({ id }) => id);
+  // Cue files are imported with ?url so Vite fingerprints and bundles them.
+  const imports = [];
+  const audio = Object.fromEntries(ready
+    .filter(({ audio: cues }) => Object.keys(cues).length > 0)
+    .map(({ pack, audio: cues }) => [pack.id, Object.fromEntries(Object.entries(cues).map(([cue, files]) =>
+      [cue, files.map((absolute) => {
+        let importPath = relative(dirname(registryOut), absolute).split(sep).join("/");
+        if (!importPath.startsWith(".")) importPath = `./${importPath}`;
+        const identifier = `fighterAudio${imports.length}`;
+        imports.push(`import ${identifier} from ${JSON.stringify(`${importPath}?url`)};`);
+        return identifier;
+      })]))]));
+  const audioLiteral = `{${Object.entries(audio).map(([id, cues]) => `\n  ${JSON.stringify(id)}: {${
+    Object.entries(cues).map(([cue, identifiers]) => `\n    ${cue}: [${identifiers.join(", ")}],`).join("")
+  }\n  },`).join("")}${Object.keys(audio).length > 0 ? "\n" : ""}}`;
   const registry = [
     "/* Generated by scripts/fighter_packs.mjs. Do not edit directly. */",
+    ...imports,
     `export const OPEN_3D_FIGHTER_IDS = ${JSON.stringify(ids3D, null, 2)} as const;`,
     `export const OPEN_2D_FIGHTER_IDS = ${JSON.stringify(ids2D, null, 2)} as const;`,
     "/** Every ready fighter in pack `order`, regardless of render pipeline. */",
     `export const OPEN_FIGHTER_IDS_BY_ORDER = ${JSON.stringify(packs.map(({ id }) => id), null, 2)} as const;`,
     `export const OPEN_FIGHTER_PACKS = ${JSON.stringify(packs, null, 2)} as const;`,
+    "/** Bundled URLs of each fighter's sound cues (fighter.json audio.cues), by fighter and cue. */",
+    `export const OPEN_FIGHTER_AUDIO: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = ${audioLiteral};`,
     "",
   ].join("\n");
   const manifest3D = {

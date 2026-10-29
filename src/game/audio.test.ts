@@ -1,10 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  FIGHTER_AUDIO,
   LOCAL_AUDIO_SAMPLES,
   LOCAL_MUSIC_TRACKS,
   createAudioEngine,
+  fighterCueSources,
+  type FighterAudioCue,
 } from "./audio";
+import { FIGHTER_IDS } from "./contracts";
+import { FIGHTER_AUDIO_CUES, pickVariant } from "./fighterAudio.mjs";
+import { OPEN_FIGHTER_AUDIO } from "./generated/openFighterRegistry";
 import { DEFAULT_STAGE_ID, STAGE_IDS } from "./stages";
 
 class FakeAudio {
@@ -29,9 +33,10 @@ class FakeAudio {
   }
 }
 
-const harness = () => {
+const harness = (random?: () => number) => {
   const players: FakeAudio[] = [];
   const audio = createAudioEngine({
+    random,
     masterVolume: 0.5,
     musicVolume: 0.6,
     effectsVolume: 0.8,
@@ -61,9 +66,14 @@ describe("local audio engine", () => {
     for (const source of Object.values(LOCAL_AUDIO_SAMPLES)) {
       expect(source).toMatch(/^\/assets\/audio\/open\//);
     }
-    for (const cues of Object.values(FIGHTER_AUDIO)) {
-      for (const source of Object.values(cues)) {
-        expect(source).toMatch(/^\/assets\/audio\/open\//);
+    // A fighter's cues are its own pack's files or the shared samples.
+    const shared = new Set<string>(Object.values(LOCAL_AUDIO_SAMPLES));
+    for (const fighter of FIGHTER_IDS) {
+      const own = new Set(Object.values(OPEN_FIGHTER_AUDIO[fighter] ?? {}).flat());
+      for (const cue of Object.keys(FIGHTER_AUDIO_CUES) as FighterAudioCue[]) {
+        for (const source of fighterCueSources(fighter, cue)) {
+          expect(own.has(source) || shared.has(source)).toBe(true);
+        }
       }
     }
   });
@@ -149,18 +159,84 @@ describe("local audio engine", () => {
     ]));
   });
 
-  it("uses neutral redistributable samples for every fighter", () => {
+  it("falls back to the shared samples for a fighter without its own sounds", () => {
+    expect(OPEN_FIGHTER_AUDIO.george).toBeUndefined();
     const { audio, players } = harness();
     audio.fighterCue("george", "attack");
+    audio.fighterCue("george", "smash");
+    audio.fighterCue("george", "special");
+    audio.fighterCue("george", "taunt");
+    audio.fighterCue("george", "hurt");
+    audio.fighterCue("george", "ko");
     audio.fighterCue("wolf", "jump");
     audio.announceFighter("kaykit-knight");
 
-    expect(FIGHTER_AUDIO.george.attack).toBe(LOCAL_AUDIO_SAMPLES.hitLight);
+    // Every attack kind and the taunt borrow the attack sample; hurt and ko stay silent.
     expect(players.map(({ source }) => source)).toEqual([
+      LOCAL_AUDIO_SAMPLES.hitLight,
+      LOCAL_AUDIO_SAMPLES.hitLight,
+      LOCAL_AUDIO_SAMPLES.hitLight,
       LOCAL_AUDIO_SAMPLES.hitLight,
       LOCAL_AUDIO_SAMPLES.dodge,
       LOCAL_AUDIO_SAMPLES.ready,
     ]);
+  });
+
+  describe("a fighter with its own sounds", () => {
+    const buckle = OPEN_FIGHTER_AUDIO.buckle!;
+    let now = 0;
+    afterEach(() => vi.restoreAllMocks());
+    // Far enough apart that no repeat is deduplicated.
+    const spacedOut = () => vi.spyOn(performance, "now").mockImplementation(() => (now += 1_000));
+
+    it("plays the pack's file for every cue it declares", () => {
+      spacedOut();
+      const { audio, players } = harness(() => 0);
+      for (const cue of Object.keys(buckle) as FighterAudioCue[]) {
+        audio.fighterCue("buckle", cue);
+        expect(buckle[cue]).toContain(players.at(-1)!.source);
+      }
+      expect(players).toHaveLength(Object.keys(buckle).length);
+    });
+
+    it("varies among a cue's files without repeating one back to back", () => {
+      spacedOut();
+      let seed = 7;
+      const { audio, players } = harness(() => ((seed = (seed * 16807) % 2147483647) / 2147483647));
+      for (let index = 0; index < 30; index += 1) audio.fighterCue("buckle", "attack");
+      const sources = players.map(({ source }) => source);
+      expect(new Set(sources)).toEqual(new Set(buckle.attack));
+      for (let index = 1; index < sources.length; index += 1) expect(sources[index]).not.toBe(sources[index - 1]);
+    });
+
+    it("does not let a repeat inside a cue's gap through", () => {
+      vi.spyOn(performance, "now").mockReturnValue(5_000);
+      const { audio, players } = harness();
+      audio.fighterCue("buckle", "hurt");
+      audio.fighterCue("buckle", "hurt");
+      audio.fighterCue("buckle", "ko");
+      expect(players.map(({ source }) => source)).toEqual([expect.stringContaining("hurt"), buckle.ko![0]]);
+    });
+
+    it("preloads each file once, without playing it", () => {
+      const { audio, players } = harness();
+      audio.preloadFighters(["buckle", "george", "buckle"]);
+      const files = new Set(Object.values(buckle).flat());
+      expect(players.map(({ source }) => source).sort()).toEqual([...files].sort());
+      expect(players.every((player) => player.load.mock.calls.length === 1 && player.play.mock.calls.length === 0))
+        .toBe(true);
+      audio.preloadFighters(["buckle"]);
+      expect(players).toHaveLength(files.size);
+    });
+  });
+
+  it("picks every variant, and never the previous one when there is a choice", () => {
+    expect(pickVariant(1, 0, () => 0.99)).toBe(0);
+    // The first pick can land on any variant, including the last.
+    expect(pickVariant(3, -1, () => 0.99)).toBe(2);
+    expect(pickVariant(3, -1, () => 0)).toBe(0);
+    expect([0, 0.5, 0.99].map((roll) => pickVariant(3, 1, () => roll))).toEqual([0, 2, 2]);
+    expect([0, 0.99].map((roll) => pickVariant(2, 0, () => roll))).toEqual([1, 1]);
   });
 
   it("does not report an autoplay unlock before a real track exists", async () => {

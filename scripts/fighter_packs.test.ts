@@ -215,6 +215,8 @@ describe("fighter pack CLI", () => {
     mkdirSync(join(fighterDirectory, "sprites"), { recursive: true });
     const fighter = JSON.parse(readFileSync(join(projectRoot, "fighters/buckle/fighter.json"), "utf8"));
     fighter.id = "strip-fighter";
+    // Only the sprites are copied; Buckle's sound files stay behind.
+    delete fighter.audio;
     writeFileSync(join(fighterDirectory, "fighter.json"), JSON.stringify(fighter));
     const render = JSON.parse(readFileSync(join(projectRoot, "fighters/buckle/render.json"), "utf8"));
     renderEdit(render);
@@ -279,6 +281,79 @@ describe("fighter pack CLI", () => {
     const fighter = JSON.parse(readFileSync(fighterPath, "utf8"));
     fighter.visual.keyFrames = keyFrames;
     writeFileSync(fighterPath, JSON.stringify(fighter));
+    expect(() => runCli(workspace, "build")).toThrow(message);
+  });
+
+  /** rgs-stick with an audio block; `files` are written into its audio/ folder. */
+  const writeVoicedPack = (
+    workspace: ReturnType<typeof createWorkspace>,
+    audio: unknown,
+    files: Record<string, Buffer> = {},
+  ): string => {
+    const fighterDirectory = join(workspace.packs, "rgs-stick");
+    cpSync(join(projectRoot, "fighters/rgs-stick"), fighterDirectory, { recursive: true });
+    mkdirSync(join(fighterDirectory, "audio"));
+    for (const [name, bytes] of Object.entries(files)) writeFileSync(join(fighterDirectory, "audio", name), bytes);
+    const fighterPath = join(fighterDirectory, "fighter.json");
+    const fighter = JSON.parse(readFileSync(fighterPath, "utf8"));
+    fighter.audio = audio;
+    writeFileSync(fighterPath, JSON.stringify(fighter));
+    return fighterDirectory;
+  };
+  const ogg = (size = 64): Buffer => Buffer.concat([Buffer.from("OggS"), Buffer.alloc(size - 4)]);
+  const voiced = (cues: unknown) => ({ attribution: "Test sounds", license: { id: "CC0-1.0" }, cues });
+
+  it("bundles a pack's own sound cues through the registry", () => {
+    const workspace = createWorkspace();
+    writeVoicedPack(workspace, voiced({
+      attack: ["audio/swing-1.ogg", "audio/swing-2.ogg"],
+      hurt: ["audio/oof.ogg"],
+      // One file may serve several cues.
+      taunt: ["audio/swing-1.ogg"],
+    }), { "swing-1.ogg": ogg(), "swing-2.ogg": ogg(), "oof.ogg": ogg() });
+
+    runCli(workspace, "build");
+    const registry = readFileSync(workspace.registry, "utf8");
+    expect(registry).toMatch(/import fighterAudio0 from "[./]*\/?.*fighters\/rgs-stick\/audio\/swing-1\.ogg\?url";/);
+    expect(registry).toContain("attack: [fighterAudio0, fighterAudio1],");
+    expect(registry).toContain("hurt: [fighterAudio2],");
+    expect(registry).toContain("taunt: [fighterAudio3],");
+  });
+
+  it("emits an empty audio table when no pack has sounds", () => {
+    const workspace = createWorkspace();
+    writeReadyPack(workspace, () => {});
+    runCli(workspace, "build");
+    expect(readFileSync(workspace.registry, "utf8")).toMatch(/export const OPEN_FIGHTER_AUDIO: .* = \{\};/);
+  });
+
+  it.each([
+    [{ attribution: "x", license: { id: "CC0-1.0" }, cues: { attack: ["audio/a.ogg"] }, volume: 2 },
+      "audio.volume is not an audio field"],
+    [{ license: { id: "CC0-1.0" }, cues: { attack: ["audio/a.ogg"] } }, "audio.attribution is missing"],
+    [{ attribution: "x", cues: { attack: ["audio/a.ogg"] } }, "audio.license.id is missing"],
+    [voiced({}), "audio.cues must name at least one cue"],
+    [voiced({ yell: ["audio/a.ogg"] }), "audio.cues.yell is not a cue (attack, smash, special"],
+    [voiced({ attack: "audio/a.ogg" }), "audio.cues.attack must list 1-4 files"],
+    [voiced({ attack: ["audio/a.ogg", "audio/a.ogg"] }), "audio.cues.attack lists a file twice"],
+    [voiced({ attack: ["../rgs-stick/audio/a.ogg", "../../escape.ogg"] }), "audio.cues.attack[1] escapes the fighter pack"],
+    [voiced({ attack: ["audio/a.flac"] }), "audio.cues.attack[0] must be one of .ogg, .mp3, .m4a, .wav"],
+    [voiced({ attack: ["audio/missing.ogg"] }), "audio.cues.attack[0] (audio/missing.ogg) is missing"],
+    [voiced({ attack: ["audio/fake.ogg"] }), "audio/fake.ogg is not a valid .ogg file"],
+    [voiced({ attack: ["audio/huge.ogg"] }), "audio/huge.ogg is 300 KiB; a cue file may be at most 256 KiB"],
+    [voiced({ attack: ["audio/b1.ogg", "audio/b2.ogg", "audio/b3.ogg", "audio/b4.ogg"],
+      hurt: ["audio/b5.ogg", "audio/b6.ogg", "audio/b7.ogg", "audio/b8.ogg"], ko: ["audio/b9.ogg"] }),
+    "audio files total 2250 KiB; a pack may ship at most 2048 KiB"],
+  ])("rejects invalid audio (%j)", (audio, message) => {
+    const workspace = createWorkspace();
+    const big = ogg(250 * 1024);
+    writeVoicedPack(workspace, audio, {
+      "a.ogg": ogg(),
+      "a.flac": ogg(),
+      "fake.ogg": Buffer.from("ID3 not really ogg"),
+      "huge.ogg": ogg(300 * 1024),
+      ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((index) => [`b${index}.ogg`, big])),
+    });
     expect(() => runCli(workspace, "build")).toThrow(message);
   });
 });
