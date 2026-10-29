@@ -59,10 +59,44 @@ declared explicitly and must reference a `ground` platform.
 represents the `(0, 0)` origin, and `worldUnitsPerPixel` defines the scale. The
 blast zone must surround the platforms and both spawn points.
 
+### Smash proportions
+
+The engine runs Melee physics: one Melee unit is 7.80 world units across and
+6.79 up (`MELEE_HORIZONTAL_WORLD_SCALE`, `MELEE_VERTICAL_WORLD_SCALE`). To
+lay out a stage that plays like Smash, design it in Melee units and convert.
+Melee's Battlefield is a good reference:
+
+| | Battlefield (Melee units) | In world units |
+| --- | --- | --- |
+| Main stage edges | x = ±68.4 | ±533 |
+| Side platforms | top y = 27.2, x from ±20 to ±57.6 | 185, ±156 to ±449 |
+| Top platform | top y = 54.4, x = ±18.8 | 369, ±147 |
+| Blast lines | x = ±224, top 200, bottom −108.8 | ±1747, 1357, −738 |
+| Spawns | under the side platforms | |
+
+Fighters are 11–16 Melee units tall (78–105 world units), so a fighter is
+about half a side platform's height, as in Smash. Verdant Grove is about
+Final Destination's width (edges at ±91 Melee units) with Battlefield's
+platforms.
+
+### Camera
+
+The camera frames the fighters as Smash does: in close when they are close,
+out as they separate, keeping the ground in view while they are near it. It
+never leaves the stage's camera range, which sits inside the blast zone (80%
+of its sides and bottom, 85% of its top); a fighter beyond it shows in a
+magnifying bubble at the screen edge. Framing is defined for a 720-pixel-tall
+view and scaled, so every window size sees the same part of the stage.
+
 ## 2D and 3D rendering
 
-All four images are required for every pack. A 2D stage uses `arena` directly
-over `backdrop`. A 3D stage also provides `render.scene`; if WebGL or the GLB
+All four images are required for every pack. A 2D stage draws `backdrop` in
+world space at the arena's calibration and `arena` over it. Beyond the arena,
+the backdrop repeats mirrored tile by tile, and the top and bottom rows of
+both images carry on to the screen edges, so the scene continues without a
+seam however far the camera goes. That only works if `backdrop` is the arena
+scene without the stage: the same size, with its left, right, and top edges
+matching the arena's. A 3D stage also provides `render.scene`; if WebGL or the GLB
 fails, the same images provide the fallback.
 
 Packs cannot provide executable code. Moving platforms and hazards are

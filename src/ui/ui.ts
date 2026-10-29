@@ -469,6 +469,7 @@ export class UIController extends EventTarget {
     this.root.classList.add("cc-ui-host");
     this.root.append(this.shell);
 
+    window.addEventListener("resize", this.scaleHud);
     this.shell.addEventListener("click", this.handleClick);
     this.shell.addEventListener("change", this.handleChange);
     this.shell.addEventListener("input", this.handleInput);
@@ -1190,8 +1191,23 @@ export class UIController extends EventTarget {
         </section>`,
     );
     const hud = this.screenRoot.querySelector<HTMLElement>(".cc-hud");
-    if (hud) focusPortraits(hud);
+    if (hud) {
+      focusPortraits(hud);
+      this.scaleHud();
+    }
   }
+
+  /**
+   * The battle HUD scales with the window height, like the stage view (the
+   * camera frames a 720-pixel reference view), so it keeps its size relative
+   * to the fighters at any resolution.
+   */
+  private readonly scaleHud = (): void => {
+    const hud = this.screenRoot.querySelector<HTMLElement>(".cc-hud");
+    if (!hud) return;
+    const scale = Math.min(2.4, Math.max(0.8, (window.innerHeight || 720) / 720));
+    hud.style.setProperty("--cc-hud-scale", scale.toFixed(3));
+  };
 
   updateHud(state: HUDState): void {
     // The simulation keeps publishing its final snapshot while the results
@@ -1419,6 +1435,7 @@ export class UIController extends EventTarget {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    window.removeEventListener("resize", this.scaleHud);
     this.matchLaunch?.controller.abort(new DOMException("Interface destroyed", "AbortError"));
     this.matchLaunch = undefined;
     this.matchLaunchGeneration += 1;

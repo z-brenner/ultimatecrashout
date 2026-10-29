@@ -1794,11 +1794,21 @@ input {
   position: absolute;
   inset: auto 0 0;
   display: grid;
-  padding: 0 clamp(16px, 4vw, 70px) clamp(10px, 2.2vh, 26px);
-  grid-template-columns: 1fr minmax(230px, 300px) minmax(190px, auto) minmax(230px, 300px) 1fr;
+  --cc-hud-scale: 1;
+  padding: 0 clamp(16px, 4vw, 70px) calc(clamp(10px, 2.2vh, 26px) * var(--cc-hud-scale));
+  grid-template-columns:
+    1fr
+    minmax(calc(230px * var(--cc-hud-scale)), calc(300px * var(--cc-hud-scale)))
+    minmax(calc(190px * var(--cc-hud-scale)), auto)
+    minmax(calc(230px * var(--cc-hud-scale)), calc(300px * var(--cc-hud-scale)))
+    1fr;
   align-items: end;
   gap: clamp(10px, 2vw, 28px);
 }
+
+/* Panels scale with the window height (set from src/ui/ui.ts). */
+.cc-hud > .cc-hud-player,
+.cc-hud > .cc-hud__center { zoom: var(--cc-hud-scale); }
 
 .cc-hud > .cc-hud-player--p1 { grid-column: 2; }
 .cc-hud > .cc-hud__center { grid-column: 3; }

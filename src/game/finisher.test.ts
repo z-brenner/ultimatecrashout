@@ -92,6 +92,7 @@ describe("finishing blow camera", () => {
   type Harness = {
     finisher: unknown;
     camera: { x: number; y: number; zoom: number };
+    width: number;
     height: number;
     reducedMotion: boolean;
     finisherStrength(): number;
@@ -100,10 +101,14 @@ describe("finishing blow camera", () => {
     finisherCamera(this: Harness, snapshot: GameSnapshot): Harness["camera"] | null;
     finisherStrength(this: Harness): number;
   };
-  const snapshot = { fighters: [{ position: { x: 0, y: 0 } }, { position: { x: 900, y: 400 } }] } as unknown as GameSnapshot;
+  const snapshot = {
+    fighters: [{ position: { x: 0, y: 0 } }, { position: { x: 300, y: 300 } }],
+    stage: { blastZone: { left: -1250, right: 1250, top: 1080, bottom: -760 } },
+  } as unknown as GameSnapshot;
   const harness = (elapsed: number, reducedMotion = false): Harness => ({
     finisher: { target: 1, final: false, timing: FINISHER, elapsed },
     camera: { x: 0, y: 110, zoom: 0.8 },
+    width: 1280,
     height: 720,
     reducedMotion,
     finisherStrength: prototype.finisherStrength,
@@ -112,7 +117,13 @@ describe("finishing blow camera", () => {
   it("punches in on the launched fighter at full strength", () => {
     const camera = prototype.finisherCamera.call(harness(FINISHER.seconds * 0.4), snapshot)!;
     expect(camera.zoom).toBeCloseTo(0.8 * FINISHER.zoom, 5);
-    expect(camera.x).toBe(900);
+    expect(camera.x).toBe(300);
+  });
+
+  it("stays inside the stage's camera range near its edge", () => {
+    const edge = { ...snapshot, fighters: [snapshot.fighters[0], { position: { x: 1200, y: 300 } }] } as GameSnapshot;
+    const camera = prototype.finisherCamera.call(harness(FINISHER.seconds * 0.4), edge)!;
+    expect(camera.x + 640 / camera.zoom).toBeLessThanOrEqual(1250 * 0.8 + 1e-6);
   });
 
   it("leaves the camera alone with reduced motion, or once the blow is over", () => {

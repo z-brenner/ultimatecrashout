@@ -73,11 +73,11 @@ export const OPEN_STAGE_PACKS = [
       ],
       "spawns": [
         {
-          "x": -186,
+          "x": -299.46,
           "y": 60
         },
         {
-          "x": 186,
+          "x": 299.46,
           "y": 60
         }
       ],
@@ -222,11 +222,11 @@ export const OPEN_STAGE_PACKS = [
       ],
       "spawns": [
         {
-          "x": -200,
+          "x": -340,
           "y": 60
         },
         {
-          "x": 200,
+          "x": 340,
           "y": 60
         }
       ],

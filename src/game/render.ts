@@ -138,8 +138,15 @@ export const CAMERA_SCREEN_ANCHOR_RATIO = 0.42;
 export const CAMERA_SAFE_TOP_RATIO = 0.12;
 export const CAMERA_SAFE_BOTTOM_RATIO = 0.78;
 export const CAMERA_REST_GROUND_RATIO = 0.68;
+/**
+ * Framing is defined for a 720-pixel-tall view and scaled to the real
+ * viewport, so every window size sees the same part of the stage, as on a
+ * console. Zoom limits below are for that reference height.
+ */
+export const CAMERA_REFERENCE_HEIGHT = 720;
 export const CAMERA_MIN_ZOOM = 0.54;
-export const CAMERA_MAX_ZOOM = 1.08;
+/** Closest zoom: a typical fighter body fills about 16% of the screen height (its art a little more), as in Smash. */
+export const CAMERA_MAX_ZOOM = 1.3;
 export const CAMERA_RISE_FOLLOW_RATE = 15;
 export const CAMERA_FALL_FOLLOW_RATE = 4;
 export const CAMERA_HORIZONTAL_FOLLOW_RATE = 6.5;
@@ -151,9 +158,11 @@ export const CAMERA_MAX_VERTICAL_SPEED = 760;
 export const CAMERA_MAX_ZOOM_OUT_SPEED = 0.8;
 export const CAMERA_MAX_ZOOM_IN_SPEED = 0.42;
 
-const CAMERA_STAGE_HALF_WIDTH = 520;
-const CAMERA_STAGE_TOP = 400;
-const CAMERA_STAGE_BOTTOM = -40;
+/** The camera keeps at least this much of the stage around the fighters' centre in view. */
+const CAMERA_MIN_FRAME_HALF_WIDTH = 300;
+/** While fighters are near the ground, the framing includes it and this much above it. */
+const CAMERA_STAGE_TOP = 220;
+const CAMERA_STAGE_BOTTOM = -24;
 const CAMERA_HORIZONTAL_MARGIN = 80;
 const CAMERA_TOP_MARGIN = 32;
 const CAMERA_BOTTOM_MARGIN = 20;
@@ -265,14 +274,15 @@ export const computeGameplayCameraTarget = (
         respawnFrames: 0,
       }];
 
-  const physicalLeft = Math.min(
-    -CAMERA_STAGE_HALF_WIDTH,
-    ...focus.map((fighter) => fighter.position.x - fighter.size.width * 0.6),
-  ) - CAMERA_HORIZONTAL_MARGIN;
-  const physicalRight = Math.max(
-    CAMERA_STAGE_HALF_WIDTH,
-    ...focus.map((fighter) => fighter.position.x + fighter.size.width * 0.6),
-  ) + CAMERA_HORIZONTAL_MARGIN;
+  // Smash-style: frame the fighters, not the whole stage, so the camera zooms
+  // in on close fighting and out as they separate.
+  const fightersLeft = Math.min(...focus.map((fighter) => fighter.position.x - fighter.size.width * 0.6));
+  const fightersRight = Math.max(...focus.map((fighter) => fighter.position.x + fighter.size.width * 0.6));
+  const fightersCenter = (fightersLeft + fightersRight) / 2;
+  const physicalLeft = Math.min(fightersLeft, fightersCenter - CAMERA_MIN_FRAME_HALF_WIDTH) -
+    CAMERA_HORIZONTAL_MARGIN;
+  const physicalRight = Math.max(fightersRight, fightersCenter + CAMERA_MIN_FRAME_HALF_WIDTH) +
+    CAMERA_HORIZONTAL_MARGIN;
   const actualTop = Math.max(
     ...focus.map((fighter) => fighter.position.y + fighter.size.height * 0.67),
   );
@@ -295,20 +305,18 @@ export const computeGameplayCameraTarget = (
   const verticalFit =
     viewportHeight * (CAMERA_SAFE_BOTTOM_RATIO - CAMERA_SAFE_TOP_RATIO) /
     Math.max(1, physicalTop - physicalBottom);
+  const viewScale = viewportHeight / CAMERA_REFERENCE_HEIGHT;
   const zoom = clamp(
     Math.min(horizontalFit, verticalFit),
-    CAMERA_MIN_ZOOM,
-    CAMERA_MAX_ZOOM,
+    CAMERA_MIN_ZOOM * viewScale,
+    CAMERA_MAX_ZOOM * viewScale,
   );
 
   const averageVelocityX =
     focus.reduce((total, fighter) => total + fighter.velocity.x, 0) / focus.length;
   const horizontalLead = clamp(averageVelocityX * 0.08, -90, 90);
-  const x = clamp(
-    (physicalLeft + physicalRight) / 2 + horizontalLead,
-    -350,
-    350,
-  );
+  // Stage camera bounds (applied by the renderer) keep this inside the stage.
+  const x = (physicalLeft + physicalRight) / 2 + horizontalLead;
 
   const anticipatedTop = Math.max(
     physicalTop,
@@ -339,9 +347,11 @@ export const computeGameplayCameraTarget = (
   const maximumY = anticipatedBottom + (safeBottomPx - anchorPx) / zoom;
   const restY =
     (CAMERA_REST_GROUND_RATIO - CAMERA_SCREEN_ANCHOR_RATIO) * viewportHeight / zoom;
+  // When the lookahead does not fit the safe band too, keep the fighter in
+  // view and let the ground margin use the space down to the screen edge.
   const y = minimumY <= maximumY
     ? clamp(restY, minimumY, maximumY)
-    : (minimumY + maximumY) / 2;
+    : Math.min(minimumY, anticipatedBottom + (viewportHeight - anchorPx) / zoom);
 
   return { x, y: clamp(y, 70, 650), zoom };
 };
@@ -412,14 +422,17 @@ export const updateGameplayCameraGoal = (
   }
 
   const anyBreach = leftBreach || rightBreach || topBreach || bottomBreach;
+  // Zoom values scale with the window height (see CAMERA_REFERENCE_HEIGHT).
+  const viewScale = viewportHeight / CAMERA_REFERENCE_HEIGHT;
+  const hysteresis = CAMERA_ZOOM_HYSTERESIS * viewScale;
   if (
     anyBreach &&
-    fittedTarget.zoom < previousGoal.zoom - CAMERA_ZOOM_HYSTERESIS
+    fittedTarget.zoom < previousGoal.zoom - hysteresis
   ) {
     next.zoom = fittedTarget.zoom;
   } else if (
     !anyBreach &&
-    fittedTarget.zoom > previousGoal.zoom + CAMERA_ZOOM_HYSTERESIS
+    fittedTarget.zoom > previousGoal.zoom + hysteresis
   ) {
     // A KO can request a very wide frame for only a few frames. Always allow
     // the goal to zoom back in once the fitted combat area shrinks; waiting for
@@ -428,10 +441,11 @@ export const updateGameplayCameraGoal = (
     next.zoom = fittedTarget.zoom;
   }
 
+  // Position limits come from the stage's camera bounds (clampCameraToBounds).
   return {
-    x: clamp(next.x, -350, 350),
-    y: clamp(next.y, 70, 650),
-    zoom: clamp(next.zoom, CAMERA_MIN_ZOOM, CAMERA_MAX_ZOOM),
+    x: next.x,
+    y: next.y,
+    zoom: clamp(next.zoom, CAMERA_MIN_ZOOM * viewScale, CAMERA_MAX_ZOOM * viewScale),
   };
 };
 
@@ -464,6 +478,47 @@ export const clampStageCameraY = (
   const maximumY = artTopWorld - (screenAnchor + overscanPx) / safeZoom;
   if (minimumY > maximumY) return (minimumY + maximumY) / 2;
   return clamp(targetY, minimumY, maximumY);
+};
+
+export interface CameraBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/**
+ * Smash-style camera range for a stage: the view never leaves it, however
+ * far a fighter flies, and a fighter beyond it shows in the magnifying
+ * bubble. Like Smash's stages, it sits inside the blast zone, so a launched
+ * fighter leaves the view shortly before the blast line.
+ */
+export const stageCameraBounds = (blastZone: CameraBounds): CameraBounds => ({
+  left: blastZone.left * 0.8,
+  right: blastZone.right * 0.8,
+  top: blastZone.top * 0.85,
+  bottom: blastZone.bottom * 0.75,
+});
+
+/** Keeps the whole view inside the camera bounds, zooming in if the view is larger. */
+export const clampCameraToBounds = (
+  camera: CameraTarget,
+  bounds: CameraBounds,
+  viewportWidth: number,
+  viewportHeight: number,
+): CameraTarget => {
+  const zoom = Math.max(
+    camera.zoom,
+    viewportWidth / Math.max(1, bounds.right - bounds.left),
+    viewportHeight / Math.max(1, bounds.top - bounds.bottom),
+  );
+  const halfWidth = viewportWidth / 2 / zoom;
+  const x = clamp(camera.x, bounds.left + halfWidth, Math.max(bounds.left + halfWidth, bounds.right - halfWidth));
+  // worldToScreen puts camera.y at the screen anchor, not the middle.
+  const minimumY = bounds.bottom + (viewportHeight * (1 - CAMERA_SCREEN_ANCHOR_RATIO)) / zoom;
+  const maximumY = bounds.top - (viewportHeight * CAMERA_SCREEN_ANCHOR_RATIO) / zoom;
+  const y = minimumY <= maximumY ? clamp(camera.y, minimumY, maximumY) : (minimumY + maximumY) / 2;
+  return { x, y, zoom };
 };
 
 export const minimumStageArtZoom = (
@@ -805,11 +860,11 @@ export class GameRenderer {
     const zoom = base.zoom * (1 + (this.finisher.timing.zoom - 1) * weight);
     // Centre the fighter a little above the middle of the screen.
     const centeredY = target.position.y + (this.height * (CAMERA_SCREEN_ANCHOR_RATIO - 0.48)) / zoom;
-    return {
+    return clampCameraToBounds({
       x: base.x + (target.position.x - base.x) * weight,
       y: base.y + (centeredY - base.y) * weight,
       zoom,
-    };
+    }, stageCameraBounds(snapshot.stage.blastZone), this.width, this.height);
   }
 
   /** Dims the stage behind the fighters during a finishing blow. */
@@ -898,16 +953,18 @@ export class GameRenderer {
       this.width,
       this.height,
     );
+    const bounds = stageCameraBounds(snapshot.stage.blastZone);
+    const bounded = clampCameraToBounds(target, bounds, this.width, this.height);
     if (!this.cameraPrimed) {
-      this.camera = target;
-      this.cameraGoal = target;
+      this.camera = { ...bounded };
+      this.cameraGoal = { ...bounded };
       this.cameraPrimed = true;
       return;
     }
 
     if (snapshot.events.some(({ type }) => type === "respawn")) {
-      this.camera = target;
-      this.cameraGoal = target;
+      this.camera = { ...bounded };
+      this.cameraGoal = { ...bounded };
       this.cameraStableSeconds = 0;
       return;
     }
@@ -950,6 +1007,8 @@ export class GameRenderer {
         : CAMERA_FALL_FOLLOW_RATE,
       CAMERA_MAX_VERTICAL_SPEED,
     );
+    // Zoom speeds are for the reference view height, like the zoom itself.
+    const viewScale = this.height / CAMERA_REFERENCE_HEIGHT;
     this.camera.zoom = smoothCameraValue(
       this.camera.zoom,
       this.cameraGoal.zoom,
@@ -957,10 +1016,14 @@ export class GameRenderer {
       this.cameraGoal.zoom < this.camera.zoom
         ? CAMERA_ZOOM_OUT_RATE
         : CAMERA_ZOOM_IN_RATE,
-      this.cameraGoal.zoom < this.camera.zoom
+      (this.cameraGoal.zoom < this.camera.zoom
         ? CAMERA_MAX_ZOOM_OUT_SPEED
-        : CAMERA_MAX_ZOOM_IN_SPEED,
+        : CAMERA_MAX_ZOOM_IN_SPEED) * viewScale,
     );
+    // The goal can sit outside the stage's camera range (a fighter far
+    // off-stage); the view stops at its edge and the magnifier takes over.
+    this.cameraGoal = clampCameraToBounds(this.cameraGoal, bounds, this.width, this.height);
+    this.camera = clampCameraToBounds(this.camera, bounds, this.width, this.height);
   }
 
   /** Pass the engine's live hitboxes to draw the collision overlay, or null to hide it. */
@@ -1013,6 +1076,8 @@ export class GameRenderer {
   private drawStageFallback(snapshot: GameSnapshot): void {
     const ctx = this.context;
     const backdrop = this.stageBackdrops.get(snapshot.stage.id);
+    // 2D stages draw their backdrop in world space with the arena (drawStage).
+    if (this.stageArt.get(snapshot.stage.id)?.complete && backdrop?.complete && backdrop.naturalWidth > 0) return;
     if (backdrop?.complete && backdrop.naturalWidth > 0 && backdrop.naturalHeight > 0) {
       const sourceAspect = backdrop.naturalWidth / backdrop.naturalHeight;
       const viewportAspect = this.width / this.height;
@@ -1088,10 +1153,63 @@ export class GameRenderer {
     ctx.save();
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    // Draw the calibrated arena exactly once. When the camera reveals space
-    // beyond the capture, the dedicated stage backdrop remains visible rather
-    // than stretched edge pixels that resemble a duplicated arena.
-    ctx.drawImage(art, topLeft.x, topLeft.y, width, height);
+    // The world beyond the arena: the stage's backdrop (the same scene
+    // without the stage) in world space, mirrored tile by tile sideways and
+    // with its top and bottom rows carried on, so the scene continues with no
+    // seam however far the camera goes. Mirroring never duplicates the arena.
+    const backdrop = this.stageBackdrops.get(snapshot.stage.id);
+    const tileWorldWidth = definition.art.width * definition.art.worldUnitsPerPixel;
+    if (backdrop?.complete && backdrop.naturalWidth > 0) {
+      const margin = 96;
+      const viewLeftWorld = this.camera.x - (this.width / 2 + margin) / this.camera.zoom;
+      const viewRightWorld = this.camera.x + (this.width / 2 + margin) / this.camera.zoom;
+      const first = Math.floor((viewLeftWorld - topLeftWorld.x) / tileWorldWidth);
+      const last = Math.floor((viewRightWorld - topLeftWorld.x) / tileWorldWidth);
+      for (let tile = first; tile <= last; tile += 1) {
+        this.drawWorldTile(backdrop, topLeft.x + tile * width, topLeft.y, width, height, tile % 2 !== 0, true);
+      }
+    }
+    // The arena once, at its calibrated place; its bottom row continues the
+    // stage's body down past the bottom of the art.
+    this.drawWorldTile(art, topLeft.x, topLeft.y, width, height, false, false);
+    ctx.restore();
+  }
+
+  /**
+   * Draws one stage image at a screen rectangle, optionally mirrored, and
+   * carries its bottom row (and, for backdrops, its top row) on to the edges
+   * of the screen.
+   */
+  private drawWorldTile(
+    image: HTMLImageElement,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    mirrored: boolean,
+    extendTop: boolean,
+  ): void {
+    const ctx = this.context;
+    const margin = 96;
+    ctx.save();
+    if (mirrored) {
+      ctx.translate(x + width, 0);
+      ctx.scale(-1, 1);
+    } else {
+      ctx.translate(x, 0);
+    }
+    // One pixel of overlap hides hairline gaps between neighbouring tiles.
+    ctx.drawImage(image, -0.5, y, width + 1, height);
+    if (extendTop && y > -margin) {
+      ctx.drawImage(image, 0, 0, image.naturalWidth, 1, -0.5, -margin, width + 1, y + margin + 1);
+    }
+    const bottom = y + height;
+    if (bottom < this.height + margin) {
+      ctx.drawImage(
+        image, 0, image.naturalHeight - 1, image.naturalWidth, 1,
+        -0.5, bottom - 1, width + 1, this.height + margin - bottom + 1,
+      );
+    }
     ctx.restore();
   }
 
