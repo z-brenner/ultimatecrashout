@@ -1840,7 +1840,9 @@ input {
   overflow: hidden;
 }
 
-/* Circular frames show the head and shoulders, not the whole body. */
+/* Circular frames show the head and shoulders, not the whole body: the crop
+   is measured per image (src/ui/portraitFocus.ts); until then the image is
+   hidden, so it never jumps from this fallback to its crop. */
 .cc-hud .cc-hud-player__portrait .cc-portrait--image .cc-portrait__sprite,
 .cc-hud .cc-hud-stock .cc-portrait--image .cc-portrait__sprite {
   width: 100%;
@@ -1848,6 +1850,8 @@ input {
   object-fit: cover;
   object-position: 50% 8%;
 }
+
+.cc-hud .cc-portrait__sprite:not([data-portrait-focus]) { visibility: hidden; }
 
 .cc-hud-player__stocks {
   display: flex;
@@ -2232,7 +2236,7 @@ input {
   .cc-hud { grid-template-columns: 1fr 1fr; padding-inline: 12px; }
   .cc-hud > .cc-hud-player--p1 { grid-column: 1; }
   .cc-hud > .cc-hud-player--p2 { grid-column: 2; justify-self: end; }
-  .cc-hud > .cc-hud__center { position: absolute; right: 0; bottom: 118px; left: 0; }
+  .cc-hud > .cc-hud__center { position: absolute; right: 0; bottom: 118px; left: 0; grid-column: 1 / -1; }
   .cc-hud-player { min-height: 80px; padding-left: 62px; }
   .cc-hud-player__portrait { width: 68px; height: 68px; }
   .cc-results { grid-template-columns: 38% 1fr; padding: 25px; }

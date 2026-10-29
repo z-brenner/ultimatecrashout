@@ -36,6 +36,7 @@ describe("complete local UI flow", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
+    delete (HTMLElement.prototype as unknown as { animate?: unknown }).animate;
     document.body.innerHTML = "";
   });
 
@@ -290,6 +291,7 @@ describe("complete local UI flow", () => {
     document.body.append(root);
     const ui = new UIController(root);
     const animate = vi.fn();
+    // Removed again in afterEach, even if this test fails.
     (HTMLElement.prototype as unknown as { animate: unknown }).animate = animate;
     click(root, "[data-ui-action='boot-skip']");
     click(root, "[data-ui-action='title-start']");
@@ -332,8 +334,19 @@ describe("complete local UI flow", () => {
     update([9, 0], [2, 0]);
     expect(stockIcons(0)).toHaveLength(1);
     expect(panel(0).querySelector(".cc-hud-stock-count")?.textContent).toBe("×9");
+
+    // A different skin redraws the whole panel, so portrait and stocks agree.
+    ui.updateHud({
+      players: [
+        { fighter: OPEN_P1, stocks: 9, damage: 0 },
+        { fighter: OPEN_P1, skin: "01", stocks: 2, damage: 0 },
+      ],
+    });
+    const arts = [...panel(1).querySelectorAll<HTMLImageElement>("img[data-portrait-art]")]
+      .map((image) => image.dataset.portraitArt);
+    expect(arts).toHaveLength(3);
+    expect(arts.every((art) => art?.includes(`/${OPEN_P1}/`))).toBe(true);
     ui.destroy();
-    delete (HTMLElement.prototype as unknown as { animate?: unknown }).animate;
   });
 
   it("keeps the loading screen visible until selected assets are ready", async () => {

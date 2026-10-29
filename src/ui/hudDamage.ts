@@ -34,13 +34,21 @@ export const damageColor = (percent: number): string => {
   return toHex(from.map((channel, index) => channel + (to[index]! - channel) * ratio));
 };
 
-/** Whole percent and tenths, as the HUD shows them ("34" and ".5"), capped at 999.9. */
-export const formatDamage = (percent: number): { whole: string; tenths: string } => {
+/** Damage in whole tenths of a percent, as shown: 0–9999. */
+export const damageTenths = (percent: number): number => {
   const value = Number.isFinite(percent) ? Math.min(999.9, Math.max(0, percent)) : 0;
   // The epsilon keeps 12.3 from flooring to 12.2 through float error.
-  const tenths = Math.floor(value * 10 + 1e-6);
+  return Math.floor(value * 10 + 1e-6);
+};
+
+/** Whole percent and tenths, as the HUD shows them ("34" and ".5"), capped at 999.9. */
+export const formatDamage = (percent: number): { whole: string; tenths: string } => {
+  const tenths = damageTenths(percent);
   return { whole: String(Math.floor(tenths / 10)), tenths: `.${tenths % 10}` };
 };
+
+/** What a screen reader hears for a stock row. */
+export const stockLabel = (stocks: number): string => `${stocks} stock${stocks === 1 ? "" : "s"} left`;
 
 /** Above this many stocks the HUD shows one icon and a count instead of a row. */
 export const MAX_STOCK_ICONS = 5;

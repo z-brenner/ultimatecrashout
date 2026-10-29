@@ -293,12 +293,12 @@ test.describe("fighter audio", () => {
     expect(before.loaded.filter(ownCue("attack"))).toHaveLength(3);
     expect(before.played.some(ownCue("attack"))).toBe(false);
 
-    // One action at a time: a jump pressed mid-jab is ignored, like in play.
+    // One press each, and the next only once Buckle is idle again: a jump
+    // pressed mid-jab is ignored, like in play.
     for (const [key, cue] of [["KeyH", "jump"], ["KeyF", "attack"]] as const) {
-      await expect.poll(async () => {
-        await page.keyboard.press(key);
-        return (await audioLog()).played.some(ownCue(cue));
-      }, { timeout: 5_000, intervals: [400] }).toBe(true);
+      await expect.poll(async () => (await fighters(page))![0]!.state, { timeout: 5_000 }).toBe("idle");
+      await page.keyboard.press(key);
+      await expect.poll(async () => (await audioLog()).played.some(ownCue(cue)), { timeout: 3_000 }).toBe(true);
     }
     expect(problems).toEqual([]);
   });

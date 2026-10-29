@@ -42,11 +42,16 @@ export const portraitCrop = (rgba: ArrayLike<number>, width: number, height: num
   return { x: clamp(centerX - size / 2), y: clamp(cropTop), size };
 };
 
+/**
+ * Crops by art: a skin's recolour keeps the original's alpha, so all skins of
+ * one portrait share one measurement (data-portrait-art names the original).
+ */
 const crops = new Map<string, PortraitCrop | null>();
 const SAMPLE = 64;
 
 const measure = (image: HTMLImageElement): PortraitCrop | null => {
-  const cached = crops.get(image.currentSrc || image.src);
+  const key = image.dataset.portraitArt || image.currentSrc || image.src;
+  const cached = crops.get(key);
   if (cached !== undefined) return cached;
   let crop: PortraitCrop | null = null;
   try {
@@ -61,14 +66,20 @@ const measure = (image: HTMLImageElement): PortraitCrop | null => {
   } catch {
     // No canvas (tests) or an unreadable image: show it uncropped.
   }
-  crops.set(image.currentSrc || image.src, crop);
+  crops.set(key, crop);
   return crop;
 };
 
+const CROP_STYLES = ["position", "maxWidth", "objectFit", "width", "height", "left", "top"] as const;
+
 const apply = (image: HTMLImageElement): void => {
-  if (!image.naturalWidth) return;
-  const crop = measure(image);
-  if (!crop) return;
+  const crop = image.naturalWidth ? measure(image) : null;
+  if (!crop) {
+    // No crop for this image (unreadable or empty): drop any earlier one and show the CSS default.
+    for (const property of CROP_STYLES) image.style[property] = "";
+    image.dataset.portraitFocus = "none";
+    return;
+  }
   // Scale the image so the crop fills its frame, and shift the crop into view.
   const scale = 100 / crop.size;
   image.style.position = "absolute";
@@ -87,6 +98,7 @@ export const focusPortraits = (root: ParentNode): void => {
     if (image.dataset.portraitFocusBound !== "1") {
       image.dataset.portraitFocusBound = "1";
       image.addEventListener("load", () => apply(image));
+      image.addEventListener("error", () => apply(image));
     }
     if (image.complete) apply(image);
   }
