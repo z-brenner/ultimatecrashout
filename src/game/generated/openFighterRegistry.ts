@@ -169,7 +169,7 @@ export const OPEN_FIGHTER_PACKS = [
           "recovery": 17,
           "angle": 36,
           "baseKnockback": 40,
-          "knockbackGrowth": 0.86,
+          "knockbackGrowth": 0.8,
           "hitboxes": [
             {
               "offset": {
@@ -214,8 +214,8 @@ export const OPEN_FIGHTER_PACKS = [
           "active": 4,
           "recovery": 30,
           "angle": 38,
-          "baseKnockback": 24,
-          "knockbackGrowth": 0.86,
+          "baseKnockback": 30,
+          "knockbackGrowth": 0.74,
           "hitboxes": [
             {
               "offset": {
@@ -1115,7 +1115,7 @@ export const OPEN_FIGHTER_PACKS = [
       "specials": {
         "neutral-special": {
           "label": "Blizzard Fist",
-          "damage": 23,
+          "damage": 18,
           "chargeable": true,
           "maxChargeFrames": 72,
           "radius": 62

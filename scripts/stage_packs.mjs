@@ -463,7 +463,7 @@ const scaffold = async () => {
         { platformId: "main", side: "right" },
       ],
       spawns: [{ x: -180, y: 100 }, { x: 180, y: 100 }],
-      blastZone: { left: -1200, right: 1200, top: 1050, bottom: -750 },
+      blastZone: { left: -1660, right: 1660, top: 1357, bottom: -750 },
     },
     render: {
       kind,

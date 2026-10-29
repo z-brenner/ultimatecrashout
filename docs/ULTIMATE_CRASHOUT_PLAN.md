@@ -143,12 +143,13 @@ Ordered by how much they constrain the goals.
 
    | | fsmash | usmash | dsmash | fair | bair | ftilt | uair |
    | --- | --- | --- | --- | --- | --- | --- | --- |
-   | Mid-weights | 107% | 121% | 124% | 137% | 148% | 179% | 203% |
-   | Heavies | 84–93% | 95–104% | 99–107% | | | | |
-   | Lightest (rgs-stick) | 123% | 138% | 142% | | | 201% | |
+   | Mid-weights | 108% | 122% | 126% | 136% | 145% | 165% | 182% |
+   | Heavy hitters (Yeti, George, Dark Knight) | 82–91% | 97–104% | 101–106% | | | | |
+   | Light hitter (rgs-stick) | 125% | | | | | | |
 
-   A full-charge forward smash KOs at about 68%; lighter targets die
-   earlier, heavier ones later. `src/game/koCalibration.test.ts` holds these
+   A full-charge forward smash KOs at about 66%; lighter targets die
+   earlier, heavier ones later. Measured through the engine's own hit path,
+   strongest bubble (`src/game/koMeasure.ts`). `src/game/koCalibration.test.ts` holds these
    bands.
 4. **Ultimate-style mechanics**: no L-cancel, one directional air dodge,
    perfect shield, short-hop aerials.

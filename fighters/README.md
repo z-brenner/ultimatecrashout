@@ -158,7 +158,7 @@ it declares:
       "damage": 19,
       "angle": 38,
       "baseKnockback": 30,
-      "knockbackGrowth": 0.9,
+      "knockbackGrowth": 0.76,
       "hitboxes": [
         { "offset": { "x": 24, "y": 10 }, "radius": 16, "kind": "sour", "priority": 2 },
         { "offset": { "x": 48, "y": 10 }, "endOffset": { "x": 60, "y": 4 }, "radius": 14,
@@ -190,10 +190,11 @@ Rules worth knowing:
   `gameplay.specials` would otherwise derive from damage.
 - Keep KO percents Smash-like. On Verdant Grove against a mid-weight at
   centre stage, uncharged, the generated kit KOs with forward smash around
-  105%, up and down smash around 120%, forward air around 135%, forward tilt
-  around 180% and up air around 200%; a full charge adds 40% damage (not
-  knockback) and takes a forward smash to about 70%. `src/game/koMeasure.ts`
-  measures any move (`koPercent(attacker, target, move)`), and
+  108%, up and down smash around 125%, forward air around 135%, forward tilt
+  around 165% and up air around 180%; a full charge adds 40% damage (not
+  knockback) and takes a forward smash to about 66%. `src/game/koMeasure.ts`
+  measures any move through the engine's hit path
+  (`koPercent(attacker, target, move)`), and
   `koCalibration.test.ts` fails a pack whose move KOs a mid-weight under 70%.
 
 ### Move timing, armor, and per-hitbox launches

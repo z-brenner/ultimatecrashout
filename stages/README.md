@@ -83,7 +83,7 @@ Blast lines set the KO pace with the move tables, so keep them at Smash
 distances: about 155 Melee units (1210 world units) past each ledge, the top
 about 200 Melee units (1357) above the stage, the bottom about 110 (750)
 below it. Verdant Grove's sit at x = ±1924, top 1357, bottom −760, where an
-uncharged forward smash KOs a mid-weight at about 105%. Closer lines KO
+uncharged forward smash KOs a mid-weight at about 108%. Closer lines KO
 earlier for every fighter; `koPercent` in `src/game/koMeasure.ts` takes a
 `stage` option to check a new layout.
 

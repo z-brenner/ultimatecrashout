@@ -94,7 +94,7 @@
         "recovery": 17,
         "angle": 36,
         "baseKnockback": 40,
-        "knockbackGrowth": 0.86,
+        "knockbackGrowth": 0.8,
         "hitboxes": [
           { "offset": { "x": 18, "y": -8 }, "radius": 12, "kind": "sour", "priority": 3, "damageMultiplier": 0.85, "knockbackMultiplier": 0.85 },
           { "offset": { "x": 36, "y": -6 }, "radius": 12, "kind": "normal", "priority": 2 },
@@ -109,8 +109,8 @@
         "active": 4,
         "recovery": 30,
         "angle": 38,
-        "baseKnockback": 24,
-        "knockbackGrowth": 0.86,
+        "baseKnockback": 30,
+        "knockbackGrowth": 0.74,
         "hitboxes": [
           { "offset": { "x": 18, "y": 14 }, "radius": 14, "kind": "sour", "priority": 2, "damageMultiplier": 0.85, "knockbackMultiplier": 0.85 },
           { "offset": { "x": 38, "y": 20 }, "radius": 16, "kind": "sweet", "damageMultiplier": 1.1, "knockbackMultiplier": 1.08 }

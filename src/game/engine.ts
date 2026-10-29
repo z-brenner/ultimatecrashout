@@ -151,6 +151,40 @@ export const MELEE_CLANK_DAMAGE_WINDOW = 9;
 /** A fully charged move deals this much more damage (Smash: 1.4×). */
 export const FULL_CHARGE_DAMAGE_BONUS = 0.4;
 
+/** Damage multiplier for a charged move: up to 1.4× at full charge, as in Smash. */
+export const chargeDamageScale = (move: AttackDefinition, chargeFrames: number): number =>
+  move.chargeable
+    ? 1 + clamp(chargeFrames / (move.maxChargeFrames ?? 1), 0, 1) * FULL_CHARGE_DAMAGE_BONUS
+    : 1;
+
+/**
+ * How the `hitNumber`th melee hit (1-based) from `hitbox` scales its move.
+ * Charge adds damage; knockback rises through it (Smash), not separately. A
+ * multi-hit move's hits share its damage and ignore bubble multipliers, and
+ * only its last hit launches fully.
+ */
+export const meleeHitScaling = (
+  move: AttackDefinition,
+  hitbox: ActiveMeleeHitbox,
+  chargeScale: number,
+  hitNumber: number,
+): { damageScale: number; launchScale: number; launchMove: AttackDefinition; intermediate: boolean } => {
+  const maximumHits = Math.max(1, move.multiHit ?? 1);
+  const intermediate = maximumHits > 1 && hitNumber < maximumHits;
+  return {
+    damageScale: chargeScale / maximumHits * (maximumHits > 1 ? 1 : hitbox.damageMultiplier),
+    launchScale: intermediate ? 0.16 : maximumHits > 1 ? 1 : hitbox.knockbackMultiplier,
+    // A bubble may author its own launch; the move supplies the rest.
+    launchMove: {
+      ...move,
+      angle: hitbox.angle ?? move.angle,
+      baseKnockback: hitbox.baseKnockback ?? move.baseKnockback,
+      knockbackGrowth: hitbox.knockbackGrowth ?? move.knockbackGrowth,
+    },
+    intermediate,
+  };
+};
+
 export const defensiveMoveActiveAtFrame = (
   frame: number,
   move: Pick<AttackDefinition, "startup" | "active" | "counters" | "absorbsProjectiles" | "reflectsProjectiles">,
@@ -2474,7 +2508,7 @@ export class CombatGame {
           (candidate) => candidate.owner === fighter.slot && candidate.move === action.name,
         );
         if (projectile) {
-          projectile.powerScale = this.chargeScale(move, action.chargeFrames);
+          projectile.powerScale = chargeDamageScale(move, action.chargeFrames);
           projectile.detonating = true;
           projectile.remainingFrames = Math.max(1, projectile.remainingFrames);
           projectile.velocity = { x: 0, y: 0 };
@@ -3730,10 +3764,10 @@ export class CombatGame {
 
     const firstDamage = firstMove.damage *
       collision.firstHitbox.damageMultiplier *
-      this.chargeScale(firstMove, firstAction.chargeFrames);
+      chargeDamageScale(firstMove, firstAction.chargeFrames);
     const secondDamage = secondMove.damage *
       collision.secondHitbox.damageMultiplier *
-      this.chargeScale(secondMove, secondAction.chargeFrames);
+      chargeDamageScale(secondMove, secondAction.chargeFrames);
     const reboundDamage = Math.max(firstDamage, secondDamage);
     const reboundFrames = meleeClankReboundFrames(reboundDamage);
     const outcome = meleeClankOutcome(firstDamage, secondDamage);
@@ -3803,21 +3837,12 @@ export class CombatGame {
       action.hitTargets.add(target.slot);
       action.hitCounts.set(target.slot, landedHits + 1);
       action.lastHitFrame.set(target.slot, action.frame);
-      const chargeScale = this.chargeScale(move, action.chargeFrames);
-      const isFinisher = landedHits + 1 >= maximumHits;
-      const damageScale = chargeScale / maximumHits *
-        (maximumHits > 1 ? 1 : hitbox.damageMultiplier);
-      // Charge adds damage; knockback rises through it (Smash), not separately.
-      const launchScale = maximumHits > 1 && !isFinisher
-        ? 0.16
-        : maximumHits > 1 ? 1 : hitbox.knockbackMultiplier;
-      // A bubble may author its own launch; the move supplies the rest.
-      const launchMove: AttackDefinition = {
-        ...effectiveMove,
-        angle: hitbox.angle ?? effectiveMove.angle,
-        baseKnockback: hitbox.baseKnockback ?? effectiveMove.baseKnockback,
-        knockbackGrowth: hitbox.knockbackGrowth ?? effectiveMove.knockbackGrowth,
-      };
+      const { damageScale, launchScale, launchMove, intermediate } = meleeHitScaling(
+        effectiveMove,
+        hitbox,
+        chargeDamageScale(move, action.chargeFrames),
+        landedHits + 1,
+      );
       this.resolveAttackHit(
         attacker,
         target,
@@ -3827,16 +3852,10 @@ export class CombatGame {
         damageScale,
         "melee",
         launchScale,
-        maximumHits > 1 && !isFinisher,
+        intermediate,
         !move.commandGrab,
       );
     }
-  }
-
-  /** Damage multiplier for a charged move: up to 1.4× at full charge, as in Smash. */
-  private chargeScale(move: AttackDefinition, chargeFrames: number): number {
-    if (!move.chargeable) return 1;
-    return 1 + clamp(chargeFrames / (move.maxChargeFrames ?? 1), 0, 1) * FULL_CHARGE_DAMAGE_BONUS;
   }
 
   private refreshRecoveryAfterAirHit(target: FighterRuntime): void {
@@ -3890,7 +3909,8 @@ export class CombatGame {
           EMPTY_INPUT,
           counterScale,
           "melee",
-          counterScale,
+          // A counter hits harder through its damage (Smash); no extra launch.
+          1,
           false,
           false,
         );
@@ -4305,7 +4325,7 @@ export class CombatGame {
       ? storedChargeScaling.minimumDamage / Math.max(1, attack.damage) +
         (1 - storedChargeScaling.minimumDamage / Math.max(1, attack.damage)) * chargeProgress
       : action
-        ? this.chargeScale(attack, action.chargeFrames)
+        ? chargeDamageScale(attack, action.chargeFrames)
         : 1;
     const chargedSpeedScale = attack.chargeable
       ? 0.55 + chargeProgress * 0.45
@@ -4642,7 +4662,7 @@ export class CombatGame {
               inputs[owner.slot],
               counterScale,
               "melee",
-              counterScale,
+              1,
               false,
               false,
             );
@@ -4689,8 +4709,11 @@ export class CombatGame {
         projectile.lastHitFrame.set(target.slot, projectile.age);
         if (isFinisher) projectile.hitTargets.add(target.slot);
         const damageScale = projectile.powerScale / maximumHits;
-        // Charge and reflection add damage; knockback rises through it.
-        const launchScale = maximumHits > 1 && !isFinisher ? 0.16 : 1;
+        // Charge and reflection add damage; knockback rises through it. A
+        // shot weaker than the full move (a stored-charge tap) is weaker in
+        // knockback too.
+        const launchBase = Math.min(1, projectile.powerScale);
+        const launchScale = maximumHits > 1 && !isFinisher ? launchBase * 0.16 : launchBase;
         this.resolveAttackHit(
           owner,
           target,

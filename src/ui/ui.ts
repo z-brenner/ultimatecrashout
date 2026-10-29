@@ -940,7 +940,8 @@ export class UIController extends EventTarget {
   showStageSelect(): void {
     const selected = getStageDefinition(this.selectedStage);
     const zoneWidth = selected.blastZone.right - selected.blastZone.left;
-    const zoneLabel = zoneWidth >= 2_800 ? "Large" : zoneWidth <= 2_000 ? "Compact" : "Standard";
+    // Smash-sized blast zones are 3500-3900 wide (Battlefield to Final Destination).
+    const zoneLabel = zoneWidth >= 4_300 ? "Large" : zoneWidth <= 3_300 ? "Compact" : "Standard";
     const stageCount = String(STAGE_IDS.length).padStart(2, "0");
     const movingCount = selected.platforms.filter(({ motion }) => motion).length;
     const hazardNote = selected.hazards.length === 0 ? "None on this stage" : this.settings.stageHazards ? "On" : "Off";
