@@ -8,6 +8,7 @@ import {
   mkdir,
   readFile,
   readdir,
+  realpath,
   rename,
   writeFile,
 } from "node:fs/promises";
@@ -95,6 +96,9 @@ const validateAsset = async (
   const info = await lstat(absolute).catch(() => null);
   assert(info?.isFile(), `${id}: asset ${assetPath} is missing`);
   assert(!info.isSymbolicLink(), `${id}: symbolic links are prohibited (${assetPath})`);
+  // A symlinked folder on the way would still reach outside the pack.
+  assert((await realpath(absolute)).startsWith(`${await realpath(directory)}${sep}`),
+    `${id}: render.${label} escapes the stage pack through a symbolic link`);
   assert(allowedExtensions.has(extname(assetPath).toLowerCase()), `${id}: invalid extension for ${assetPath}`);
   assert(info.size <= maximumBytes, `${id}: ${assetPath} exceeds ${maximumBytes} bytes`);
   const expected = checksums.get(assetPath);

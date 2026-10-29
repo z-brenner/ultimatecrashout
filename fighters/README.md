@@ -62,7 +62,8 @@ fields are:
 - `identity`: display name, archetype, play style, and colors;
 - `gameplay`: hurtbox, weight, movement, and four special moves;
 - `visual`: orientation, attribution, source page, and license;
-- `effects`: material for each attack and shared visual traits.
+- `effects`: material for each attack and shared visual traits;
+- `audio` (optional): the fighter's own sounds (see "Sounds and voice").
 
 `render.json` maps upstream files to the engine's 50 animation roles. For 2D,
 every slot must be classified exactly once as `direct`, `adapted`, or
@@ -290,6 +291,60 @@ running, open **Lab**, pick the fighter and a skin, and every save of
 `fighter.json` reloads the preview. A fighter drawn only in greys and blacks
 cannot be told apart by palette swaps; the tool says so, and such a pack
 should leave `visual.skins` out.
+
+## Sounds and voice
+
+A pack may ship its own sounds in an `audio/` folder and list them per cue
+in `fighter.json`. Every cue is optional; a cue left out uses the shared
+sound (or none), so a pack can start with just a hurt voice:
+
+```json
+"audio": {
+  "attribution": "Voice by Jo Example; swings recorded by the author",
+  "license": { "id": "CC-BY-4.0", "url": "https://creativecommons.org/licenses/by/4.0/" },
+  "cues": {
+    "attack": ["audio/swing-1.ogg", "audio/swing-2.ogg", "audio/swing-3.ogg"],
+    "smash": ["audio/heave.ogg"],
+    "hurt": ["audio/oof-1.ogg", "audio/oof-2.ogg"],
+    "ko": ["audio/scream.ogg"],
+    "announce": ["audio/name.ogg"]
+  }
+}
+```
+
+| Cue | Plays when | Without it |
+| --- | --- | --- |
+| `attack` | the fighter starts a jab, tilt, aerial, or dash attack | shared swing |
+| `smash` | the fighter starts a smash attack | the fighter's `attack` |
+| `special` | the fighter starts a special move | the fighter's `attack` |
+| `jump` | the fighter jumps | shared jump |
+| `hurt` | the fighter takes a hit of 5% or more (not on super armor) | silent |
+| `ko` | the fighter is KO'd off a blast line | silent (the shared KO blast still plays) |
+| `taunt` | the fighter taunts | the fighter's `attack` |
+| `victory` | the fighter wins | shared fanfare |
+| `announce` | the fighter is picked on the character select screen | shared "ready" |
+
+- List 1–4 files per cue; one plays at random each time, never the same one
+  twice in a row, so three short swings sound far less robotic than one.
+  A file may serve several cues.
+- Formats: `.ogg` (the game's own sounds use it), `.mp3`, `.m4a`, or `.wav`.
+  `.m4a` or `.mp3` is the safe choice if you care about older Safari.
+- Budgets: 256 KiB per file and 2 MiB per pack. Keep cues short
+  (attacks under 0.3 s, KO and victory under 1.5 s) and trim silence at the
+  start, or the sound lands late.
+- Level your files to a similar loudness (about −19 dBFS RMS matches the
+  starter sounds); the game does not normalise them.
+- `fighter:build` checks every path stays inside the pack, the extension,
+  that the file really is that format (its first bytes), and the budgets.
+  The files are bundled with the game, so they ship with the build.
+- `attribution` and `license` are required: say who made the sounds and
+  under which licence, exactly as for the art. Never use a real person's
+  voice, or clips from games, shows, or films, without a licence that allows
+  redistribution.
+
+With `npm run dev` running, saving `fighter.json` or a sound reloads the
+game. [`buckle`](buckle/) has a full set, synthesized by
+`scripts/starter_fighter/generate_audio.py`.
 
 ## Debugging moves
 

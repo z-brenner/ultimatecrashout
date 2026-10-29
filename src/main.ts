@@ -1,5 +1,6 @@
 import { CpuController } from "./game/ai";
 import { createAudioEngine } from "./game/audio";
+import { fighterCuesForEvent } from "./game/fighterAudioEvents";
 import type { MatchConfig, PlayerSlot } from "./game/contracts";
 import { FIXED_DT, createEmptyInput, createGame, type CombatGame, type GameEvent, type GameSnapshot } from "./game/engine";
 import { createGamepadManager, mergeInputFrames } from "./game/gamepad";
@@ -187,6 +188,7 @@ const activateMatch = (config: MatchConfig, activeRenderer: GameRenderer): void 
     config.stage,
     config.items,
   );
+  audio.preloadFighters(config.players.map(({ fighter }) => fighter));
   audio.startCombatMusic(0.25, config.stage);
   audio.ready();
 };
@@ -349,11 +351,11 @@ const eventStrength = (event: GameEvent): number => {
 };
 
 const playEvents = (events: readonly GameEvent[], snapshot: GameSnapshot): void => {
+  const fighterIn = (slot: PlayerSlot) => snapshot.fighters[slot]?.fighter;
   for (const event of events) {
-    const fighter = event.slot === undefined ? undefined : snapshot.fighters[event.slot]?.fighter;
+    for (const [fighter, cue, slot] of fighterCuesForEvent(event, fighterIn)) audio.fighterCue(fighter, cue, slot);
     switch (event.type) {
       case "attack":
-        if (fighter) audio.fighterCue(fighter, "attack");
         audio.cue(event.sound);
         break;
       case "hit":
@@ -371,8 +373,7 @@ const playEvents = (events: readonly GameEvent[], snapshot: GameSnapshot): void 
         audio.cue("shield-break");
         break;
       case "jump":
-        if (fighter) audio.fighterCue(fighter, "jump");
-        else audio.jump();
+        if (event.slot === undefined || !fighterIn(event.slot)) audio.jump();
         break;
       case "land":
         audio.cue(event.sound ?? "land");
@@ -396,12 +397,8 @@ const playEvents = (events: readonly GameEvent[], snapshot: GameSnapshot): void 
       case "respawn":
         audio.cue(event.sound);
         break;
-      case "taunt":
-        if (fighter) audio.fighterCue(fighter, "attack");
-        break;
       case "match-end":
         audio.cue("victory");
-        if (fighter) audio.fighterCue(fighter, "victory");
         break;
       default:
         break;

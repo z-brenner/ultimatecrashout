@@ -241,9 +241,52 @@
           "items": { "enum": ["blade", "heavy", "electric"] }
         }
       }
+    },
+    "audio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attribution", "license", "cues"],
+      "description": "Optional per-fighter sounds. Cues left out use the shared sounds. Each file is at most 256 KiB, and a pack's files total at most 2 MiB.",
+      "properties": {
+        "attribution": { "type": "string", "minLength": 1 },
+        "sourcePage": { "type": "string", "format": "uri" },
+        "license": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "url": { "type": "string", "format": "uri" }
+          }
+        },
+        "cues": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "attack": { "$ref": "#/$defs/audioFiles", "description": "Starting a normal attack (jab, tilts, aerials, dash attack)." },
+            "smash": { "$ref": "#/$defs/audioFiles", "description": "Starting a smash attack; falls back to attack." },
+            "special": { "$ref": "#/$defs/audioFiles", "description": "Starting a special move; falls back to attack." },
+            "jump": { "$ref": "#/$defs/audioFiles", "description": "Jumping." },
+            "hurt": { "$ref": "#/$defs/audioFiles", "description": "Taking a hit of 5% or more (not on super armor)." },
+            "ko": { "$ref": "#/$defs/audioFiles", "description": "Being KO'd off a blast line." },
+            "taunt": { "$ref": "#/$defs/audioFiles", "description": "Taunting; falls back to attack." },
+            "victory": { "$ref": "#/$defs/audioFiles", "description": "Winning a match." },
+            "announce": { "$ref": "#/$defs/audioFiles", "description": "Being picked on the character select screen." }
+          }
+        }
+      }
     }
   },
   "$defs": {
+    "audioFiles": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "description": "Pack-relative .ogg, .mp3, .m4a, or .wav files; one plays at random, never the same one twice in a row.",
+      "items": { "type": "string", "pattern": "^[^\\\\]+\\.(ogg|mp3|m4a|wav)$" }
+    },
     "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
     "special": {
       "type": "object",

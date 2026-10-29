@@ -186,5 +186,20 @@
       "up-special": "wind"
     },
     "traits": ["heavy"]
+  },
+  "audio": {
+    "attribution": "Buckle — original Ultimate Crashout starter sounds (procedural, scripts/starter_fighter/generate_audio.py)",
+    "license": { "id": "CC0-1.0", "url": "https://creativecommons.org/publicdomain/zero/1.0/" },
+    "cues": {
+      "attack": ["audio/attack-1.ogg", "audio/attack-2.ogg", "audio/attack-3.ogg"],
+      "smash": ["audio/smash-1.ogg", "audio/smash-2.ogg"],
+      "special": ["audio/special.ogg"],
+      "jump": ["audio/jump-1.ogg", "audio/jump-2.ogg"],
+      "hurt": ["audio/hurt-1.ogg", "audio/hurt-2.ogg", "audio/hurt-3.ogg"],
+      "ko": ["audio/ko.ogg"],
+      "taunt": ["audio/taunt.ogg"],
+      "victory": ["audio/victory.ogg"],
+      "announce": ["audio/announce.ogg"]
+    }
   }
 }
