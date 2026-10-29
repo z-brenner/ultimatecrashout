@@ -129,6 +129,23 @@ Ordered by how much they constrain the goals.
 4. N-player refactor (tuples → arrays) as its own PR series, with the engine
    tests as the safety net.
 
+### Presentation and feel (Smash-style)
+
+1. ~~Battle HUD~~, ~~finishing blows, GAME!, KO blasts, magnifier~~ (done).
+2. ~~Smash-like camera~~ (done): frames the fighters (zooms in on close
+   fighting), the same view at any window size, stage camera range with the
+   magnifier beyond it, a seamless world past the arena, spawns under the
+   side platforms.
+3. **KO pace** (with the Ultimate-style mechanics): measured on Verdant
+   Grove, an uncharged forward smash at centre stage KOs at 15–70% (Buckle
+   on Buckle: 30%), where Smash Ultimate's land around 90–130%. Two causes:
+   the side blast lines are about 70 Melee units from the ledge against
+   Smash's ~155, and the forward smashes are tuned like Marth's tipper
+   (knockback growth 1.1–1.26). Widening the blast lines alone only reaches
+   ~55% (1.55× wider), so blast zones and move knockback need retuning
+   together, against a target KO-percent table. Wider blast lines also need
+   a wider camera range, which the seamless world now allows.
+
 ### Phase 4 — online (speculative)
 
 Only after deterministic replays are proven: add state snapshot/restore,

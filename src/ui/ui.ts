@@ -33,6 +33,7 @@ import { FIGHTER_IDS, getFighterDefinition } from "../game/roster";
 import type { TestLabController } from "./testLab";
 import { MAX_STOCK_ICONS, damageColor, damageTenths, formatDamage, stockLabel } from "./hudDamage";
 import { focusPortraits } from "./portraitFocus";
+import { cameraViewScale } from "../game/cameraScale";
 import {
   DEFAULT_STAGE_ID,
   STAGE_DEFINITIONS,
@@ -469,10 +470,12 @@ export class UIController extends EventTarget {
     this.root.classList.add("cc-ui-host");
     this.root.append(this.shell);
 
+    window.addEventListener("resize", this.scaleHud);
     this.shell.addEventListener("click", this.handleClick);
     this.shell.addEventListener("change", this.handleChange);
     this.shell.addEventListener("input", this.handleInput);
     this.shell.addEventListener("keydown", this.handleKeydown);
+    window.addEventListener("keydown", this.handleUnfocusedKeydown);
     this.shell.addEventListener("pointerdown", this.handlePointerDown);
     this.shell.addEventListener("pointermove", this.handlePointerMove);
     this.shell.addEventListener("pointerover", this.handlePointerOver);
@@ -1190,8 +1193,25 @@ export class UIController extends EventTarget {
         </section>`,
     );
     const hud = this.screenRoot.querySelector<HTMLElement>(".cc-hud");
-    if (hud) focusPortraits(hud);
+    if (hud) {
+      focusPortraits(hud);
+      this.scaleHud();
+    }
   }
+
+  /**
+   * The battle HUD scales with the window height, like the stage view (the
+   * camera frames a 720-pixel reference view), so it keeps its size relative
+   * to the fighters at any resolution.
+   */
+  private readonly scaleHud = (): void => {
+    const hud = this.screenRoot.querySelector<HTMLElement>(".cc-hud");
+    if (!hud) return;
+    // The same rule as the camera (cameraViewScale): the limiting dimension
+    // against 1280×720, so tall narrow windows do not overflow.
+    const scale = Math.min(2.4, Math.max(0.8, cameraViewScale(window.innerWidth || 1280, window.innerHeight || 720)));
+    hud.style.setProperty("--cc-hud-scale", scale.toFixed(3));
+  };
 
   updateHud(state: HUDState): void {
     // The simulation keeps publishing its final snapshot while the results
@@ -1419,6 +1439,8 @@ export class UIController extends EventTarget {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    window.removeEventListener("resize", this.scaleHud);
+    window.removeEventListener("keydown", this.handleUnfocusedKeydown);
     this.matchLaunch?.controller.abort(new DOMException("Interface destroyed", "AbortError"));
     this.matchLaunch = undefined;
     this.matchLaunchGeneration += 1;
@@ -2417,6 +2439,18 @@ export class UIController extends EventTarget {
     const output = this.screenRoot.querySelector<HTMLOutputElement>(`[data-setting-output="${key}"]`);
     if (output) output.value = `${Math.round(value * 100)}%`;
     this.publishSettings();
+  };
+
+  /**
+   * When the focused control is replaced (e.g. skipping the boot screen),
+   * focus falls to <body> until the next screen focuses its control a frame
+   * later, and key presses then never reach the shell. Pressing Start in
+   * that moment must still work.
+   */
+  private readonly handleUnfocusedKeydown = (event: KeyboardEvent): void => {
+    if (event.target !== document.body && event.target !== document.documentElement) return;
+    if (this.currentScreen !== "boot" && this.currentScreen !== "title") return;
+    this.handleKeydown(event);
   };
 
   private readonly handleKeydown = (event: KeyboardEvent): void => {
