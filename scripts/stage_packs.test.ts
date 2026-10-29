@@ -180,7 +180,7 @@ describe("stage pack CLI", () => {
       top(g).motion!.periodFrames = 60;
     }, "top.motion moves up to"],
     ["leaves blast zone", (g: Record<string, unknown>) => {
-      top(g).motion!.path = [{ x: 0, y: 317 }, { x: 0, y: 1200 }];
+      top(g).motion!.path = [{ x: 0, y: 317 }, { x: 0, y: 1500 }];
       top(g).motion!.periodFrames = 3600;
     }, "top exceeds the blastZone at the top"],
     ["sine loop", (g: Record<string, unknown>) => { top(g).motion!.mode = "loop"; }, "sine easing only applies to pingpong"],
@@ -191,7 +191,7 @@ describe("stage pack CLI", () => {
       "warningFrames + activeFrames must be less than periodFrames"],
     ["huge damage", (g: Record<string, unknown>) => { (hazard(g).hit as Record<string, number>).damage = 90; },
       "gameplay.hazards[0].hit.damage must be 0-40"],
-    ["zone outside", (g: Record<string, unknown>) => { (hazard(g).area as Record<string, number>).x = 1300; },
+    ["zone outside", (g: Record<string, unknown>) => { (hazard(g).area as Record<string, number>).x = 2100; },
       "gameplay.hazards[0].area must lie inside the blastZone"],
     ["bad colour", (g: Record<string, unknown>) => { hazard(g).color = "blue" as never; }, "gameplay.hazards[0].color must be a #rrggbb colour"],
   ])("rejects invalid stage mechanics: %s", (_name, edit, message) => {

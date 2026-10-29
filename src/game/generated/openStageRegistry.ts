@@ -82,9 +82,9 @@ export const OPEN_STAGE_PACKS = [
         }
       ],
       "blastZone": {
-        "left": -1250,
-        "right": 1250,
-        "top": 1080,
+        "left": -1924,
+        "right": 1924,
+        "top": 1357,
         "bottom": -760
       }
     },
@@ -231,9 +231,9 @@ export const OPEN_STAGE_PACKS = [
         }
       ],
       "blastZone": {
-        "left": -1320,
-        "right": 1320,
-        "top": 1100,
+        "left": -1964,
+        "right": 1964,
+        "top": 1357,
         "bottom": -780
       }
     },

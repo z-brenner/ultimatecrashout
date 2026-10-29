@@ -39,7 +39,7 @@
     "specials": {
       "neutral-special": {
         "label": "Blizzard Fist",
-        "damage": 23,
+        "damage": 18,
         "chargeable": true,
         "maxChargeFrames": 72,
         "radius": 62

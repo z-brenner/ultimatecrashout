@@ -136,15 +136,23 @@ Ordered by how much they constrain the goals.
    fighting), the same view at any window size, stage camera range with the
    magnifier beyond it, a seamless world past the arena, spawns under the
    side platforms.
-3. **KO pace** (with the Ultimate-style mechanics): measured on Verdant
-   Grove, an uncharged forward smash at centre stage KOs at 15–70% (Buckle
-   on Buckle: 30%), where Smash Ultimate's land around 90–130%. Two causes:
-   the side blast lines are about 70 Melee units from the ledge against
-   Smash's ~155, and the forward smashes are tuned like Marth's tipper
-   (knockback growth 1.1–1.26). Widening the blast lines alone only reaches
-   ~55% (1.55× wider), so blast zones and move knockback need retuning
-   together, against a target KO-percent table. Wider blast lines also need
-   a wider camera range, which the seamless world now allows.
+3. ~~KO pace~~ (done): blast lines at Smash distances (about 155 Melee
+   units past the ledge), smash attacks retuned to Smash-like knockback, and
+   `power` and charge now add damage rather than knockback. On Verdant Grove
+   against a mid-weight, uncharged, centre stage:
+
+   | | fsmash | usmash | dsmash | fair | bair | ftilt | uair |
+   | --- | --- | --- | --- | --- | --- | --- | --- |
+   | Mid-weights | 108% | 122% | 126% | 136% | 145% | 165% | 182% |
+   | Heavy hitters (Yeti, George, Dark Knight) | 82–91% | 97–104% | 101–106% | | | | |
+   | Light hitter (rgs-stick) | 125% | | | | | | |
+
+   A full-charge forward smash KOs at about 66%; lighter targets die
+   earlier, heavier ones later. Measured through the engine's own hit path,
+   strongest bubble (`src/game/koMeasure.ts`). `src/game/koCalibration.test.ts` holds these
+   bands.
+4. **Ultimate-style mechanics**: no L-cancel, one directional air dodge,
+   perfect shield, short-hop aerials.
 
 ### Phase 4 — online (speculative)
 

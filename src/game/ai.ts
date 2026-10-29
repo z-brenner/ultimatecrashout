@@ -261,7 +261,8 @@ export class CpuController {
         };
       }
       const vertical = dy > 42 ? 0.8 : dy < -38 ? -0.8 : 0;
-      const useSmash = this.level >= 2 && opponent.percent > 82 && this.random.next() < 0.5;
+      // Uncharged smashes KO from about 90% (heavies) to 120%; start fishing a little before.
+      const useSmash = this.level >= 2 && opponent.percent > 90 && this.random.next() < 0.5;
       return {
         direction: { x: vertical === 0 ? toward : 0, y: vertical },
         action: "attack",
@@ -290,7 +291,7 @@ export class CpuController {
       return {
         direction: { x: toward, y: 0 },
         action: "attack",
-        flickDirection: this.level === 3 && opponent.percent > 100,
+        flickDirection: this.level === 3 && opponent.percent > 105,
         shieldFrames: 0,
       };
     }
