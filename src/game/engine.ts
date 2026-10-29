@@ -148,6 +148,8 @@ const AERIAL_NORMALS = new Set<MoveName>([
 const COMBO_STARTER_NORMALS = new Set<MoveName>(["jab", "up-tilt", "down-tilt"]);
 export const SAME_MOVE_LOCK_BREAK_LAUNCH_MULTIPLIER = 1.45;
 export const MELEE_CLANK_DAMAGE_WINDOW = 9;
+/** A fully charged move deals this much more damage (Smash: 1.4×). */
+export const FULL_CHARGE_DAMAGE_BONUS = 0.4;
 
 export const defensiveMoveActiveAtFrame = (
   frame: number,
@@ -3805,9 +3807,10 @@ export class CombatGame {
       const isFinisher = landedHits + 1 >= maximumHits;
       const damageScale = chargeScale / maximumHits *
         (maximumHits > 1 ? 1 : hitbox.damageMultiplier);
+      // Charge adds damage; knockback rises through it (Smash), not separately.
       const launchScale = maximumHits > 1 && !isFinisher
-        ? chargeScale * 0.16
-        : chargeScale * (maximumHits > 1 ? 1 : hitbox.knockbackMultiplier);
+        ? 0.16
+        : maximumHits > 1 ? 1 : hitbox.knockbackMultiplier;
       // A bubble may author its own launch; the move supplies the rest.
       const launchMove: AttackDefinition = {
         ...effectiveMove,
@@ -3830,9 +3833,10 @@ export class CombatGame {
     }
   }
 
+  /** Damage multiplier for a charged move: up to 1.4× at full charge, as in Smash. */
   private chargeScale(move: AttackDefinition, chargeFrames: number): number {
     if (!move.chargeable) return 1;
-    return 1 + clamp(chargeFrames / (move.maxChargeFrames ?? 1), 0, 1) * 0.5;
+    return 1 + clamp(chargeFrames / (move.maxChargeFrames ?? 1), 0, 1) * FULL_CHARGE_DAMAGE_BONUS;
   }
 
   private refreshRecoveryAfterAirHit(target: FighterRuntime): void {
@@ -4685,9 +4689,8 @@ export class CombatGame {
         projectile.lastHitFrame.set(target.slot, projectile.age);
         if (isFinisher) projectile.hitTargets.add(target.slot);
         const damageScale = projectile.powerScale / maximumHits;
-        const launchScale = maximumHits > 1 && !isFinisher
-          ? projectile.powerScale * 0.16
-          : projectile.powerScale;
+        // Charge and reflection add damage; knockback rises through it.
+        const launchScale = maximumHits > 1 && !isFinisher ? 0.16 : 1;
         this.resolveAttackHit(
           owner,
           target,

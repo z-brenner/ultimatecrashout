@@ -169,7 +169,7 @@ export const OPEN_FIGHTER_PACKS = [
           "recovery": 17,
           "angle": 36,
           "baseKnockback": 40,
-          "knockbackGrowth": 0.8,
+          "knockbackGrowth": 0.86,
           "hitboxes": [
             {
               "offset": {
@@ -214,8 +214,8 @@ export const OPEN_FIGHTER_PACKS = [
           "active": 4,
           "recovery": 30,
           "angle": 38,
-          "baseKnockback": 62,
-          "knockbackGrowth": 1.1,
+          "baseKnockback": 24,
+          "knockbackGrowth": 0.86,
           "hitboxes": [
             {
               "offset": {
@@ -252,7 +252,7 @@ export const OPEN_FIGHTER_PACKS = [
           "recovery": 16,
           "angle": 85,
           "baseKnockback": 38,
-          "knockbackGrowth": 0.78,
+          "knockbackGrowth": 0.95,
           "hitboxes": [
             {
               "offset": {

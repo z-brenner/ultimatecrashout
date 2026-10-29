@@ -143,7 +143,8 @@ can reference it.
 
 Without extra data, every fighter receives the engine's generated kit: 13
 standard attacks scaled by the optional `gameplay.power`, `gameplay.speed`,
-and `gameplay.reach` multipliers, plus the four specials declared under
+and `gameplay.reach` multipliers (`power` scales damage only; as in Smash, a
+hard hitter KOs earlier because its damage feeds the knockback formula), plus the four specials declared under
 `gameplay.specials`. To give a fighter its own moves, add `gameplay.attacks`.
 Each key is one of the 17 move names, and each value replaces only the fields
 it declares:
@@ -154,10 +155,10 @@ it declares:
   "attacks": {
     "jab": { "label": "Snap Jab", "damage": 4, "startup": 2, "active": 3, "recovery": 8 },
     "forward-smash": {
-      "damage": 21,
+      "damage": 19,
       "angle": 38,
-      "baseKnockback": 64,
-      "knockbackGrowth": 1.12,
+      "baseKnockback": 30,
+      "knockbackGrowth": 0.9,
       "hitboxes": [
         { "offset": { "x": 24, "y": 10 }, "radius": 16, "kind": "sour", "priority": 2 },
         { "offset": { "x": 48, "y": 10 }, "endOffset": { "x": 60, "y": 4 }, "radius": 14,
@@ -187,6 +188,13 @@ Rules worth knowing:
   `airAcceleration` are optional fighter-wide overrides.
 - Specials may also be overridden here, for example to author knockback that
   `gameplay.specials` would otherwise derive from damage.
+- Keep KO percents Smash-like. On Verdant Grove against a mid-weight at
+  centre stage, uncharged, the generated kit KOs with forward smash around
+  105%, up and down smash around 120%, forward air around 135%, forward tilt
+  around 180% and up air around 200%; a full charge adds 40% damage (not
+  knockback) and takes a forward smash to about 70%. `src/game/koMeasure.ts`
+  measures any move (`koPercent(attacker, target, move)`), and
+  `koCalibration.test.ts` fails a pack whose move KOs a mid-weight under 70%.
 
 ### Move timing, armor, and per-hitbox launches
 
