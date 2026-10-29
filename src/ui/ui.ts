@@ -31,6 +31,8 @@ import {
 import { DEFAULT_SETTINGS as GAME_DEFAULT_SETTINGS } from "../game/settings";
 import { FIGHTER_IDS, getFighterDefinition } from "../game/roster";
 import type { TestLabController } from "./testLab";
+import { MAX_STOCK_ICONS, damageColor, formatDamage } from "./hudDamage";
+import { focusPortraits } from "./portraitFocus";
 import {
   DEFAULT_STAGE_ID,
   STAGE_DEFINITIONS,
@@ -419,6 +421,8 @@ export class UIController extends EventTarget {
   private keyboardFocusSound = false;
   private suppressFocusSound = false;
   private readonly keyboardLayoutLabels = new Map<string, string>();
+  /** What each HUD panel shows, so a frame only touches what changed. */
+  private hudShown: [HUDPlayerState | null, HUDPlayerState | null] = [null, null];
 
   constructor(
     root: HTMLElement,
@@ -1172,6 +1176,7 @@ export class UIController extends EventTarget {
       ? ""
       : formatMatchTimer(hudState.remainingTimeMs);
 
+    this.hudShown = [{ ...hudState.players[0] }, { ...hudState.players[1] }];
     this.renderScreen(
       "gameplay",
       `
@@ -1184,6 +1189,8 @@ export class UIController extends EventTarget {
           ${this.hudPlayerMarkup(1, hudState.players[1])}
         </section>`,
     );
+    const hud = this.screenRoot.querySelector<HTMLElement>(".cc-hud");
+    if (hud) focusPortraits(hud);
   }
 
   updateHud(state: HUDState): void {
@@ -1192,17 +1199,29 @@ export class UIController extends EventTarget {
     // menus or the Test Lab; startMatch/showHud owns entering gameplay.
     if (this.currentScreen !== "gameplay") return;
 
+    const damageText = (percent: number): string => Object.values(formatDamage(percent)).join("");
     for (const slot of [0, 1] as const) {
       const player = state.players[slot];
       const panel = this.screenRoot.querySelector<HTMLElement>(`[data-hud-player="${slot}"]`);
       if (!panel) continue;
+      const shown = this.hudShown[slot];
       const damage = panel.querySelector<HTMLElement>("[data-hud-damage]");
+      if (damage && (!shown || damageText(player.damage) !== damageText(shown.damage))) {
+        this.paintDamage(damage, player.damage);
+        // A hit jolts the number; a KO's reset to 0 does not.
+        if (shown && player.damage > shown.damage) this.joltDamage(damage, player.damage - shown.damage);
+      }
       const stocks = panel.querySelector<HTMLElement>("[data-hud-stocks]");
+      if (stocks && (shown?.stocks !== player.stocks || shown.fighter !== player.fighter || shown.skin !== player.skin)) {
+        stocks.innerHTML = this.stockMarkup(player);
+        focusPortraits(stocks);
+        stocks.setAttribute("aria-label", `${player.stocks} stock${player.stocks === 1 ? "" : "s"} left`);
+      }
       const name = panel.querySelector<HTMLElement>("[data-hud-name]");
-      if (damage) damage.textContent = String(Math.max(0, Math.round(player.damage)));
-      if (stocks) stocks.innerHTML = this.stockMarkup(player.stocks);
-      if (name) name.textContent = player.name ?? fighterById(player.fighter).name;
+      const label = player.name ?? fighterById(player.fighter).name;
+      if (name && name.textContent !== label) name.textContent = label;
       panel.classList.toggle("is-danger", player.damage >= 100);
+      this.hudShown[slot] = { ...player };
     }
 
     const announcement = this.screenRoot.querySelector<HTMLElement>("[data-hud-announcement]");
@@ -1820,17 +1839,45 @@ export class UIController extends EventTarget {
 
   private hudPlayerMarkup(slot: PlayerSlot, state: HUDPlayerState): string {
     const fighter = fighterById(state.fighter);
+    const { whole, tenths } = formatDamage(state.damage);
     return `
       <article class="cc-hud-player cc-hud-player--p${slot + 1}${state.damage >= 100 ? " is-danger" : ""}" data-hud-player="${slot}">
+        <div class="cc-hud-player__stocks" data-hud-stocks aria-label="${state.stocks} stock${state.stocks === 1 ? "" : "s"} left">${this.stockMarkup(state)}</div>
         <div class="cc-hud-player__portrait">${portraitMarkup(state.fighter, true, state.skin ?? "00")}</div>
+        <div class="cc-hud-player__damage" data-hud-damage data-damage="${whole}" style="--cc-damage-color:${damageColor(state.damage)}"><strong>${whole}</strong><small>${tenths}</small><span>%</span></div>
         <div class="cc-hud-player__identity"><span>P${slot + 1}</span><strong data-hud-name>${escapeHtml(state.name ?? fighter.name)}</strong></div>
-        <div class="cc-hud-player__damage"><strong data-hud-damage>${Math.max(0, Math.round(state.damage))}</strong><span>%</span></div>
-        <div class="cc-hud-player__stocks" data-hud-stocks>${this.stockMarkup(state.stocks)}</div>
       </article>`;
   }
 
-  private stockMarkup(stocks: number): string {
-    return Array.from({ length: Math.max(0, stocks) }, () => '<i aria-hidden="true"></i>').join("");
+  /** Stock icons are the fighter's own portrait, in its skin; many stocks collapse to "icon ×N". */
+  private stockMarkup(state: HUDPlayerState): string {
+    const stocks = Math.max(0, state.stocks);
+    const icon = `<i class="cc-hud-stock" aria-hidden="true">${portraitMarkup(state.fighter, true, state.skin ?? "00", true)}</i>`;
+    if (stocks > MAX_STOCK_ICONS) return `${icon}<b class="cc-hud-stock-count" aria-hidden="true">×${stocks}</b>`;
+    return Array.from({ length: stocks }, () => icon).join("");
+  }
+
+  private paintDamage(element: HTMLElement, percent: number): void {
+    const { whole, tenths } = formatDamage(percent);
+    element.dataset.damage = whole;
+    element.style.setProperty("--cc-damage-color", damageColor(percent));
+    const [wholeElement, tenthsElement] = [element.querySelector("strong"), element.querySelector("small")];
+    if (wholeElement) wholeElement.textContent = whole;
+    if (tenthsElement) tenthsElement.textContent = tenths;
+  }
+
+  /** Shakes the damage number, harder for bigger hits, unless motion is turned down. */
+  private joltDamage(element: HTMLElement, amount: number): void {
+    if (typeof element.animate !== "function" || this.settings.shake <= 0) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const strength = Math.min(1, 0.35 + amount / 20) * Math.max(0.4, this.settings.shake);
+    const offset = (sign: number) => `translate(${(sign * 7 * strength).toFixed(1)}px, ${(-3 * strength).toFixed(1)}px) scale(${(1 + 0.22 * strength).toFixed(3)})`;
+    element.animate([
+      { transform: offset(1) },
+      { transform: offset(-1) },
+      { transform: `translate(${(3 * strength).toFixed(1)}px, 0) scale(1.04)` },
+      { transform: "none" },
+    ], { duration: 260, easing: "ease-out" });
   }
 
   private pauseKeysMarkup(slot: PlayerSlot): string {

@@ -221,7 +221,10 @@ test.describe("skins", () => {
       (window as unknown as Record<string, { getSnapshot(): { fighters: { skin: string }[] } }>)[api]!
         .getSnapshot().fighters.map(({ skin }) => skin),
     debugApi)).toEqual(["00", "01"]);
-    await expect(page.locator(".cc-hud-player").nth(1).locator(".cc-portrait__sprite"))
+    await expect(page.locator(".cc-hud-player").nth(1).locator(".cc-hud-player__portrait .cc-portrait__sprite"))
+      .toHaveAttribute("src", /^blob:/, RECOLOR_TIMEOUT);
+    // Stock icons wear the skin too.
+    await expect(page.locator(".cc-hud-player").nth(1).locator(".cc-hud-stock .cc-portrait__sprite").first())
       .toHaveAttribute("src", /^blob:/, RECOLOR_TIMEOUT);
     expect(workers.some((url) => url.includes("skinRecolor.worker"))).toBe(true);
     expect(problems).toEqual([]);
@@ -290,12 +293,13 @@ test.describe("fighter audio", () => {
     expect(before.loaded.filter(ownCue("attack"))).toHaveLength(3);
     expect(before.played.some(ownCue("attack"))).toBe(false);
 
-    await page.keyboard.press("KeyF");
-    await page.keyboard.press("KeyH");
-    await expect.poll(async () => {
-      const { played } = await audioLog();
-      return [played.some(ownCue("attack")), played.some(ownCue("jump"))];
-    }, { timeout: 3_000 }).toEqual([true, true]);
+    // One action at a time: a jump pressed mid-jab is ignored, like in play.
+    for (const [key, cue] of [["KeyH", "jump"], ["KeyF", "attack"]] as const) {
+      await expect.poll(async () => {
+        await page.keyboard.press(key);
+        return (await audioLog()).played.some(ownCue(cue));
+      }, { timeout: 5_000, intervals: [400] }).toBe(true);
+    }
     expect(problems).toEqual([]);
   });
 });
