@@ -128,6 +128,22 @@ describe("perfect shield (parry)", () => {
   });
 });
 
+describe("shield drop timing", () => {
+  it("lasts exactly the shield-drop frames, the release frame counting as the first", () => {
+    const game = newGame([{ x: -300, y: 60 }, { x: 300, y: 60 }]);
+    game.step([input({ held: ["shield"], pressed: ["shield"] }), empty()]);
+    for (let frame = 0; frame < 6; frame += 1) game.step([shieldHeld(), empty()]);
+    game.step([empty(), empty()]);
+    // Mash attack: it may start only once the drop is over.
+    let firstAttack = 0;
+    for (let frame = 1; frame <= 20 && firstAttack === 0; frame += 1) {
+      const fighter = game.step([input({ held: ["attack"], pressed: ["attack"] }), empty()]).fighters[0];
+      if (fighter.state === "attack") firstAttack = frame;
+    }
+    expect(firstAttack).toBe(SHIELD_DROP_FRAMES);
+  });
+});
+
 describe("air dodge (Ultimate)", () => {
   const airborne = () => {
     // Out past the side platforms, so nothing catches the fall.
@@ -203,6 +219,38 @@ describe("short-hop aerials", () => {
       fullPeak = Math.max(fullPeak, fullHop.step([input({ held: ["jump"] }), empty()]).fighters[0].position.y);
     }
     expect(peak - groundY).toBeLessThan((fullPeak - groundY) * 0.8);
+  });
+
+  it("treats attack late in jump squat as an ordinary full-hop aerial", () => {
+    const game = newGame([{ x: -300, y: 60 }, { x: 300, y: 60 }]);
+    const groundY = game.getSnapshot().fighters[0].position.y;
+    game.step([input({ held: ["jump"], pressed: ["jump"] }), empty()]);
+    game.step([input({ held: ["jump"] }), empty()]);
+    game.step([input({ held: ["jump", "attack"], pressed: ["attack"] }), empty()]);
+    let peak = groundY;
+    for (let frame = 0; frame < 60; frame += 1) {
+      peak = Math.max(peak, game.step([input({ held: ["jump"] }), empty()]).fighters[0].position.y);
+    }
+    const fullHop = newGame([{ x: -300, y: 60 }, { x: 300, y: 60 }]);
+    fullHop.step([input({ held: ["jump"], pressed: ["jump"] }), empty()]);
+    let fullPeak = groundY;
+    for (let frame = 0; frame < 60; frame += 1) {
+      fullPeak = Math.max(fullPeak, fullHop.step([input({ held: ["jump"] }), empty()]).fighters[0].position.y);
+    }
+    expect(peak).toBeCloseTo(fullPeak, 0);
+  });
+
+  it("short hops into an aerial when jump and attack are pressed together out of shield", () => {
+    const game = newGame([{ x: -300, y: 60 }, { x: 300, y: 60 }]);
+    game.step([input({ held: ["shield"], pressed: ["shield"] }), empty()]);
+    for (let frame = 0; frame < 6; frame += 1) game.step([shieldHeld(), empty()]);
+    game.step([input({ held: ["shield", "jump", "attack"], pressed: ["jump", "attack"] }), empty()]);
+    let aerial: string | null = null;
+    for (let frame = 0; frame < 30; frame += 1) {
+      const fighter = game.step([empty(), empty()]).fighters[0];
+      if (!fighter.grounded && fighter.currentMove) aerial ??= fighter.currentMove;
+    }
+    expect(aerial).toBe("neutral-air");
   });
 
   it("deals 0.85× damage with an aerial during a short hop, full damage otherwise", () => {

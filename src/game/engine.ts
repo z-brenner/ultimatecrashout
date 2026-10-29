@@ -97,6 +97,8 @@ export const SHIELD_DROP_FRAMES = 11;
 export const PARRY_WINDOW_FRAMES = 5;
 /** A parried attacker stays frozen this much longer than the parrying fighter. */
 export const PARRY_ATTACKER_EXTRA_FREEZE_FRAMES = 12;
+/** Attack this soon after jump (same frame or the next) is the short-hop aerial chord. */
+export const SHORT_HOP_AERIAL_CHORD_FRAMES = 2;
 /** Aerials during a short hop deal less damage (Ultimate: 0.85×). */
 export const SHORT_HOP_AERIAL_DAMAGE_SCALE = 0.85;
 export const FAST_FALL_BUFFER_FRAMES = 3;
@@ -1238,6 +1240,8 @@ class SeededRandom {
 }
 
 export class CombatGame {
+  /** Set when the latest resolveAttackHit was parried; its caller ends the move's hits on that target. */
+  private lastHitParried = false;
   readonly config: MatchConfig;
 
   private readonly options: Required<Pick<GameOptions, "seed" | "countdownFrames">> &
@@ -1877,7 +1881,6 @@ export class CombatGame {
 
     if (fighter.shieldDropFrames > 0) {
       fighter.shieldDropFrames -= 1;
-      fighter.parryFrames = Math.max(0, fighter.parryFrames - 1);
       fighter.state = "idle";
       fighter.velocity.x = approach(fighter.velocity.x, 0, fighter.definition.traction * 1.4 * FIXED_DT);
       this.integrateFighter(fighter, input);
@@ -1885,14 +1888,15 @@ export class CombatGame {
     }
 
     if (fighter.jumpSquatFrames > 0) {
+      const squatElapsed =
+        effectiveJumpSquatFrames(fighter.definition.jumpSquatFrames) - fighter.jumpSquatFrames;
       fighter.jumpSquatFrames -= 1;
       fighter.state = "jump-squat";
       if (!input.held.has("jump")) fighter.fullHopRequested = false;
-      if (input.pressed.has("attack") && !fighter.heldItem) {
-        // Jump and attack together: a short hop straight into an aerial.
-        this.consumeBufferedAction(fighter, "attack");
-        fighter.fullHopRequested = false;
-        fighter.shortHopAerialQueued = true;
+      // Attack a frame after jump still counts as pressing them together;
+      // later in the squat it is an ordinary buffered aerial.
+      if (input.pressed.has("attack") && squatElapsed < SHORT_HOP_AERIAL_CHORD_FRAMES - 1) {
+        this.queueShortHopAerial(fighter);
       }
       const jumpDirection = normalizedDirection(input);
       const preservingMomentum =
@@ -1930,7 +1934,9 @@ export class CombatGame {
         this.emit({ type: "jump", slot: fighter.slot, position: cloneVec(fighter.position), sound: "jump" });
         if (fighter.shortHopAerialQueued) {
           fighter.shortHopAerialQueued = false;
-          this.startMove(fighter, this.chooseNormal(fighter, normalizedDirection(input)), input);
+          if (fighter.attackLockFrames === 0) {
+            this.startMove(fighter, this.chooseNormal(fighter, normalizedDirection(input)), input);
+          }
         }
       }
       return;
@@ -2154,6 +2160,7 @@ export class CombatGame {
       // Jump out of shield, with no shield drop.
       fighter.state = "idle";
       this.updateMovement(fighter, input, direction);
+      if (input.pressed.has("attack") && fighter.jumpSquatFrames > 0) this.queueShortHopAerial(fighter);
       this.integrateFighter(fighter, input);
       return;
     }
@@ -2174,7 +2181,8 @@ export class CombatGame {
     if (fighter.state === "shield") {
       fighter.state = "idle";
       if (fighter.grounded) {
-        fighter.shieldDropFrames = SHIELD_DROP_FRAMES;
+        // This frame is the drop's first.
+        fighter.shieldDropFrames = SHIELD_DROP_FRAMES - 1;
         fighter.parryFrames = PARRY_WINDOW_FRAMES;
         this.integrateFighter(fighter, input);
         return;
@@ -2193,19 +2201,20 @@ export class CombatGame {
 
     if (
       fighter.grounded &&
+      fighter.attackLockFrames === 0 &&
+      !fighter.heldItem &&
       input.pressed.has("jump") &&
       input.pressed.has("attack") &&
       !input.pressed.has("special")
     ) {
       // Jump and attack together: a short hop straight into an aerial.
-      this.consumeBufferedAction(fighter, "attack");
       this.updateMovement(fighter, input, direction);
       if (fighter.jumpSquatFrames > 0) {
-        fighter.fullHopRequested = false;
-        fighter.shortHopAerialQueued = true;
+        this.queueShortHopAerial(fighter);
+        this.integrateFighter(fighter, input);
+        return;
       }
-      this.integrateFighter(fighter, input);
-      return;
+      // Down dropped through a soft platform instead: the attack goes on below.
     }
 
     if (
@@ -2254,6 +2263,9 @@ export class CombatGame {
     fighter.ledgeCooldownFrames = Math.max(0, fighter.ledgeCooldownFrames - 1);
     fighter.shieldLockFrames = Math.max(0, fighter.shieldLockFrames - 1);
     fighter.coyoteFrames = Math.max(0, fighter.coyoteFrames - 1);
+    fighter.parryFrames = Math.max(0, fighter.parryFrames - 1);
+    // A hit or a grab interrupts a short-hop aerial chord still in jump squat.
+    if (fighter.hitstunFrames > 0 || fighter.grabbedBy !== null) fighter.shortHopAerialQueued = false;
     fighter.fastFallInputFrames = Math.max(0, fighter.fastFallInputFrames - 1);
     fighter.smashDirectionFrames = Math.max(0, fighter.smashDirectionFrames - 1);
     if (fighter.smashDirectionFrames === 0) this.clearSmashDirection(fighter);
@@ -3375,8 +3387,6 @@ export class CombatGame {
     fighter.state = "dodge";
     fighter.action = null;
     this.clearLaunchVelocity(fighter);
-    fighter.dodgeFrames = 25;
-    fighter.invulnerableFrames = 15;
     if (airborne) {
       // Ultimate's air dodge: one per airtime (back on landing, a ledge grab
       // or a hit), no helpless fall afterwards. A directional dodge travels
@@ -3396,6 +3406,8 @@ export class CombatGame {
         : { x: 0, y: 0 };
       fighter.fastFalling = false;
     } else {
+      fighter.dodgeFrames = 25;
+      fighter.invulnerableFrames = 15;
       if (Math.abs(direction.x) <= 0.15) {
         fighter.dodgeKind = "spot";
         fighter.velocity.x = 0;
@@ -3816,10 +3828,10 @@ export class CombatGame {
 
     const firstDamage = firstMove.damage *
       collision.firstHitbox.damageMultiplier *
-      chargeDamageScale(firstMove, firstAction.chargeFrames);
+      chargeDamageScale(firstMove, firstAction.chargeFrames) * firstAction.damageScale;
     const secondDamage = secondMove.damage *
       collision.secondHitbox.damageMultiplier *
-      chargeDamageScale(secondMove, secondAction.chargeFrames);
+      chargeDamageScale(secondMove, secondAction.chargeFrames) * secondAction.damageScale;
     const reboundDamage = Math.max(firstDamage, secondDamage);
     const reboundFrames = meleeClankReboundFrames(reboundDamage);
     const outcome = meleeClankOutcome(firstDamage, secondDamage);
@@ -3907,7 +3919,16 @@ export class CombatGame {
         intermediate,
         !move.commandGrab,
       );
+      if (this.lastHitParried) action.hitCounts.set(target.slot, Math.max(1, effectiveMove.multiHit ?? 1));
     }
+  }
+
+  /** Jump and attack pressed together: the coming jump is a short hop into an aerial. */
+  private queueShortHopAerial(fighter: FighterRuntime): void {
+    if (fighter.attackLockFrames > 0 || fighter.heldItem) return;
+    this.consumeBufferedAction(fighter, "attack");
+    fighter.fullHopRequested = false;
+    fighter.shortHopAerialQueued = true;
   }
 
   /**
@@ -3924,6 +3945,8 @@ export class CombatGame {
   ): void {
     target.parryFrames = 0;
     target.shieldDropFrames = 0;
+    // The rest of a parried multi-hit move cannot land on the parrying fighter.
+    this.lastHitParried = true;
     const freeze = Math.ceil(move.hitstop * 0.7);
     target.hitstopFrames = Math.max(target.hitstopFrames, freeze);
     if (source === "melee") {
@@ -3964,6 +3987,7 @@ export class CombatGame {
     canBeCountered = true,
     launchFacing: -1 | 1 = attacker.facing,
   ): void {
+    this.lastHitParried = false;
     if (canBeCountered) {
       const counterAction = target.action;
       const counterMove = counterAction
@@ -4818,6 +4842,8 @@ export class CombatGame {
           true,
           this.projectileLaunchFacing(projectile, target),
         );
+        // A parried projectile's remaining hits pass through the parrying fighter.
+        if (this.lastHitParried) projectile.hitTargets.add(target.slot);
         if (
           (!isFinisher || projectile.definition.returns) &&
           projectile.remainingFrames > 0
