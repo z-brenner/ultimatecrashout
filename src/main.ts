@@ -374,6 +374,9 @@ const playEvents = (events: readonly GameEvent[], snapshot: GameSnapshot): void 
       case "clank":
         audio.cue("clank");
         break;
+      case "parry":
+        audio.cue("parry");
+        break;
       case "shield-break":
         audio.cue("shield-break");
         break;

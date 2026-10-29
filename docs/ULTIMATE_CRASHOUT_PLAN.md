@@ -151,8 +151,13 @@ Ordered by how much they constrain the goals.
    earlier, heavier ones later. Measured through the engine's own hit path,
    strongest bubble (`src/game/koMeasure.ts`). `src/game/koCalibration.test.ts` holds these
    bands.
-4. **Ultimate-style mechanics**: no L-cancel, one directional air dodge,
-   perfect shield, short-hop aerials.
+4. ~~Ultimate-style mechanics~~ (done): no L-cancel (aerials keep their
+   own landing lag); one air dodge per airtime, neutral or directional, with
+   no helpless fall (it comes back on landing, a ledge grab or a hit);
+   letting go of shield takes 11 frames and a hit in the first 5 is parried
+   (no shield damage, the attacker freezes 12 frames longer); jump out of
+   shield; jump + attack together for a short-hop aerial, and every aerial
+   during a short hop deals 0.85× damage.
 
 ### Phase 4 — online (speculative)
 

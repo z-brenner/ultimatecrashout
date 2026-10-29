@@ -204,7 +204,7 @@ window is inclusive.
 
 | Field | Applies to | Effect |
 | --- | --- | --- |
-| `landingLag` | aerials | Frames of lag when the aerial lands. An L-cancel halves it. Defaults to `recovery × 0.42`, clamped to 6–16. |
+| `landingLag` | aerials | Frames of lag when the aerial lands (there is no L-cancel, as in Ultimate). Defaults to `recovery × 0.42`, clamped to 6–16. |
 | `autoCancel: { "before": 3, "after": 30 }` | aerials | Landing before frame `before`, or on/after frame `after`, uses the 4-frame auto-cancel landing instead. Either bound may be omitted. |
 | `intangible: { "start": 0, "end": 5 }` | any move | Nothing can hit or grab the fighter during those frames. |
 | `superArmor: { "start": 4, "end": 14 }` | any move | Hits still deal damage and hitstop but do not flinch, launch, or interrupt the move. |
@@ -227,7 +227,10 @@ Notes:
   during the hold. Count windows on the move as if it were released at once.
 - Super armor absorbs melee hits, projectiles, and item hits. Grabs and command
   grabs still beat it.
-- When both apply, the shorter of the auto-cancel landing and the L-cancel wins.
+- Inside an auto-cancel window the landing is the shorter of the auto-cancel
+  landing and the move's own `landingLag`.
+- Any aerial during a short hop deals 0.85× damage (Ultimate's rule); author
+  aerial damage for a full hop.
 
 In the F9 overlay the hurtbox turns blue while intangible and purple during
 super armor.

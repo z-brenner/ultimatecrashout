@@ -87,7 +87,18 @@ export const SHORT_HOP_RELEASE_GRACE_FRAMES = 4;
 export const GROUND_RUN_SPEED_MULTIPLIER = 0.92;
 export const AIR_DODGE_VELOCITY_RETENTION = 0.86;
 export const AIR_DODGE_SPEED_MULTIPLIER = 1.9;
-export const L_CANCEL_WINDOW_FRAMES = 7;
+export const NEUTRAL_AIR_DODGE_FRAMES = 49;
+export const NEUTRAL_AIR_DODGE_INTANGIBLE_FRAMES = 26;
+export const DIRECTIONAL_AIR_DODGE_FRAMES = 56;
+export const DIRECTIONAL_AIR_DODGE_INTANGIBLE_FRAMES = 17;
+/** Letting go of shield takes this long (Ultimate: 11 frames)... */
+export const SHIELD_DROP_FRAMES = 11;
+/** ...and a hit in its first frames is parried (Ultimate: 5). */
+export const PARRY_WINDOW_FRAMES = 5;
+/** A parried attacker stays frozen this much longer than the parrying fighter. */
+export const PARRY_ATTACKER_EXTRA_FREEZE_FRAMES = 12;
+/** Aerials during a short hop deal less damage (Ultimate: 0.85×). */
+export const SHORT_HOP_AERIAL_DAMAGE_SCALE = 0.85;
 export const FAST_FALL_BUFFER_FRAMES = 3;
 export const WAVEDASH_LANDING_LAG_FRAMES = 10;
 export const GROUND_TO_AIR_MOMENTUM = 0.8;
@@ -166,13 +177,14 @@ export const chargeDamageScale = (move: AttackDefinition, chargeFrames: number):
 export const meleeHitScaling = (
   move: AttackDefinition,
   hitbox: ActiveMeleeHitbox,
-  chargeScale: number,
+  /** Extra damage: charge, a short-hop aerial's 0.85×. */
+  damageBonus: number,
   hitNumber: number,
 ): { damageScale: number; launchScale: number; launchMove: AttackDefinition; intermediate: boolean } => {
   const maximumHits = Math.max(1, move.multiHit ?? 1);
   const intermediate = maximumHits > 1 && hitNumber < maximumHits;
   return {
-    damageScale: chargeScale / maximumHits * (maximumHits > 1 ? 1 : hitbox.damageMultiplier),
+    damageScale: damageBonus / maximumHits * (maximumHits > 1 ? 1 : hitbox.damageMultiplier),
     launchScale: intermediate ? 0.16 : maximumHits > 1 ? 1 : hitbox.knockbackMultiplier,
     // A bubble may author its own launch; the move supplies the rest.
     launchMove: {
@@ -598,6 +610,7 @@ export type GameEventType =
   | "land"
   | "hit"
   | "shield-hit"
+  | "parry"
   | "clank"
   | "shield-break"
   | "dodge"
@@ -634,7 +647,6 @@ export interface GameEvent {
   impactSpeed?: number;
   projectileKind?: ProjectileDefinition["kind"];
   entityId?: number;
-  lCancelled?: boolean;
   wavedash?: boolean;
   /** The hit landed on super armor: damage applied, no flinch or launch. */
   armored?: boolean;
@@ -681,6 +693,8 @@ interface ActiveMove {
   specialPhase: "startup" | "active" | "recovery" | "landing" | null;
   lastSpecialDirection: Vec2 | null;
   appliedSelfDamage: boolean;
+  /** Extra damage multiplier: 0.85 for an aerial during a short hop. */
+  damageScale: number;
 }
 
 interface FighterRuntime {
@@ -709,7 +723,6 @@ interface FighterRuntime {
   floating: boolean;
   airUpSpecialUsed: boolean;
   airDodgeUsed: boolean;
-  airDodgeHelpless: boolean;
   analogRunning: boolean;
   coyoteFrames: number;
   bufferedAction: BufferableAction | null;
@@ -723,6 +736,10 @@ interface FighterRuntime {
   shield: number;
   shieldLockFrames: number;
   shieldStunFrames: number;
+  /** Frames left of letting go of shield; nothing else starts meanwhile. */
+  shieldDropFrames: number;
+  /** Frames left in which a hit is parried. */
+  parryFrames: number;
   invulnerableFrames: number;
   hitstopFrames: number;
   hitstopElapsedFrames: number;
@@ -745,9 +762,12 @@ interface FighterRuntime {
   jumpSquatFrames: number;
   fullHopRequested: boolean;
   shortHopReleaseFrames: number;
+  /** Airborne from a short hop (until landing or a double jump): aerials deal less. */
+  shortHopAirtime: boolean;
+  /** Jump and attack pressed together: the short hop takes off into an aerial. */
+  shortHopAerialQueued: boolean;
   landingLagFrames: number;
   wavedashFrames: number;
-  lCancelFrames: number;
   dashFrames: number;
   turnFrames: number;
   tauntFrames: number;
@@ -1183,21 +1203,13 @@ export const landingLagFramesForAttack = (attack: AttackDefinition): number =>
   attack.landingLag ?? clamp(Math.round(attack.recovery * 0.42), 6, 16);
 
 /**
- * Landing lag when an aerial touches down on move frame `frame`. Auto-cancel
- * and L-cancel each shorten the landing; whichever is shorter applies, so
- * authoring an auto-cancel window can never make an L-cancel worse.
+ * Landing lag when an aerial touches down on move frame `frame`: the move's
+ * own, or the short auto-cancel landing inside its auto-cancel window. As in
+ * Ultimate there is no L-cancel; landing lag is tuned short instead.
  */
-export const aerialLandingLagFrames = (
-  attack: AttackDefinition,
-  frame: number,
-  lCancelled: boolean,
-): number => {
+export const aerialLandingLagFrames = (attack: AttackDefinition, frame: number): number => {
   const base = landingLagFramesForAttack(attack);
-  return Math.min(
-    base,
-    aerialAutoCancelled(attack, frame) ? AUTO_CANCEL_LANDING_FRAMES : base,
-    lCancelled ? Math.floor(base / 2) : base,
-  );
+  return aerialAutoCancelled(attack, frame) ? Math.min(base, AUTO_CANCEL_LANDING_FRAMES) : base;
 };
 
 const withoutEdges = (input: InputFrame): InputFrame => ({
@@ -1548,7 +1560,6 @@ export class CombatGame {
       floating: false,
       airUpSpecialUsed: false,
       airDodgeUsed: false,
-      airDodgeHelpless: false,
       analogRunning: false,
       coyoteFrames: 0,
       bufferedAction: null,
@@ -1562,6 +1573,8 @@ export class CombatGame {
       shield: definition.shieldHealth,
       shieldLockFrames: 0,
       shieldStunFrames: 0,
+      shieldDropFrames: 0,
+      parryFrames: 0,
       invulnerableFrames: 0,
       hitstopFrames: 0,
       hitstopElapsedFrames: 0,
@@ -1583,9 +1596,10 @@ export class CombatGame {
       jumpSquatFrames: 0,
       fullHopRequested: true,
       shortHopReleaseFrames: 0,
+      shortHopAirtime: false,
+      shortHopAerialQueued: false,
       landingLagFrames: 0,
       wavedashFrames: 0,
-      lCancelFrames: 0,
       dashFrames: 0,
       turnFrames: 0,
       tauntFrames: 0,
@@ -1627,11 +1641,11 @@ export class CombatGame {
       fighter.hitstopFrames > 0 ||
       fighter.hitstunFrames > 0 ||
       fighter.shieldStunFrames > 0 ||
+      fighter.shieldDropFrames > 0 ||
       fighter.jumpSquatFrames > 0 ||
       fighter.landingLagFrames > 0 ||
       fighter.tauntFrames > 0 ||
       fighter.dodgeFrames > 0 ||
-      fighter.airDodgeHelpless ||
       fighter.itemUseFrames > 0 ||
       fighter.grabTarget !== null ||
       fighter.grabFrames > 0 ||
@@ -1732,18 +1746,11 @@ export class CombatGame {
       fighter.techLockoutFrames = TECH_INPUT_LOCKOUT_FRAMES;
     }
     // Hitlag/hitstun accept DI, SDI and tech inputs, but must not accidentally
-    // arm fast-fall or L-cancel for an action the defender is no longer doing.
+    // arm fast-fall for an action the defender is no longer doing.
     if (fighter.hitstopFrames > 0 || fighter.hitstunFrames > 0) return;
     if (fighter.grounded) return;
     if (input.pressed.has("down")) {
       fighter.fastFallInputFrames = FAST_FALL_BUFFER_FRAMES;
-    }
-    if (
-      input.pressed.has("shield") &&
-      fighter.action &&
-      AERIAL_NORMALS.has(fighter.action.name)
-    ) {
-      fighter.lCancelFrames = L_CANCEL_WINDOW_FRAMES;
     }
     if (
       !fighter.fastFalling &&
@@ -1868,10 +1875,25 @@ export class CombatGame {
       return;
     }
 
+    if (fighter.shieldDropFrames > 0) {
+      fighter.shieldDropFrames -= 1;
+      fighter.parryFrames = Math.max(0, fighter.parryFrames - 1);
+      fighter.state = "idle";
+      fighter.velocity.x = approach(fighter.velocity.x, 0, fighter.definition.traction * 1.4 * FIXED_DT);
+      this.integrateFighter(fighter, input);
+      return;
+    }
+
     if (fighter.jumpSquatFrames > 0) {
       fighter.jumpSquatFrames -= 1;
       fighter.state = "jump-squat";
       if (!input.held.has("jump")) fighter.fullHopRequested = false;
+      if (input.pressed.has("attack") && !fighter.heldItem) {
+        // Jump and attack together: a short hop straight into an aerial.
+        this.consumeBufferedAction(fighter, "attack");
+        fighter.fullHopRequested = false;
+        fighter.shortHopAerialQueued = true;
+      }
       const jumpDirection = normalizedDirection(input);
       const preservingMomentum =
         Math.abs(jumpDirection.x) > 0.08 &&
@@ -1901,10 +1923,15 @@ export class CombatGame {
         fighter.shortHopReleaseFrames = fighter.fullHopRequested
           ? SHORT_HOP_RELEASE_GRACE_FRAMES
           : 0;
+        fighter.shortHopAirtime = !fighter.fullHopRequested;
         fighter.fastFalling = false;
         fighter.fastFallInputFrames = 0;
         fighter.state = "jump";
         this.emit({ type: "jump", slot: fighter.slot, position: cloneVec(fighter.position), sound: "jump" });
+        if (fighter.shortHopAerialQueued) {
+          fighter.shortHopAerialQueued = false;
+          this.startMove(fighter, this.chooseNormal(fighter, normalizedDirection(input)), input);
+        }
       }
       return;
     }
@@ -1918,6 +1945,7 @@ export class CombatGame {
         fighter.velocity.y = Math.min(fighter.velocity.y, shortHopSpeed);
         fighter.fullHopRequested = false;
         fighter.shortHopReleaseFrames = 0;
+        fighter.shortHopAirtime = true;
       } else {
         fighter.shortHopReleaseFrames -= 1;
       }
@@ -1963,12 +1991,6 @@ export class CombatGame {
         fighter.dodgeKind = null;
         if (fighter.landingLagFrames === 0) fighter.state = fighter.grounded ? "idle" : "fall";
       }
-      return;
-    }
-
-    if (fighter.airDodgeHelpless && !fighter.grounded) {
-      fighter.state = "fall";
-      this.integrateFighter(fighter, input);
       return;
     }
 
@@ -2128,6 +2150,14 @@ export class CombatGame {
       return;
     }
 
+    if (fighter.state === "shield" && fighter.grounded && input.pressed.has("jump")) {
+      // Jump out of shield, with no shield drop.
+      fighter.state = "idle";
+      this.updateMovement(fighter, input, direction);
+      this.integrateFighter(fighter, input);
+      return;
+    }
+
     if (
       (input.held.has("shield") || input.pressed.has("shield")) &&
       fighter.grounded &&
@@ -2141,7 +2171,15 @@ export class CombatGame {
       return;
     }
 
-    if (fighter.state === "shield") fighter.state = "idle";
+    if (fighter.state === "shield") {
+      fighter.state = "idle";
+      if (fighter.grounded) {
+        fighter.shieldDropFrames = SHIELD_DROP_FRAMES;
+        fighter.parryFrames = PARRY_WINDOW_FRAMES;
+        this.integrateFighter(fighter, input);
+        return;
+      }
+    }
 
     if (
       fighter.attackLockFrames === 0 &&
@@ -2149,6 +2187,23 @@ export class CombatGame {
       fighter.heldItem
     ) {
       this.useHeldItem(fighter, input, inputs[slotOther(fighter.slot)]);
+      this.integrateFighter(fighter, input);
+      return;
+    }
+
+    if (
+      fighter.grounded &&
+      input.pressed.has("jump") &&
+      input.pressed.has("attack") &&
+      !input.pressed.has("special")
+    ) {
+      // Jump and attack together: a short hop straight into an aerial.
+      this.consumeBufferedAction(fighter, "attack");
+      this.updateMovement(fighter, input, direction);
+      if (fighter.jumpSquatFrames > 0) {
+        fighter.fullHopRequested = false;
+        fighter.shortHopAerialQueued = true;
+      }
       this.integrateFighter(fighter, input);
       return;
     }
@@ -2199,7 +2254,6 @@ export class CombatGame {
     fighter.ledgeCooldownFrames = Math.max(0, fighter.ledgeCooldownFrames - 1);
     fighter.shieldLockFrames = Math.max(0, fighter.shieldLockFrames - 1);
     fighter.coyoteFrames = Math.max(0, fighter.coyoteFrames - 1);
-    fighter.lCancelFrames = Math.max(0, fighter.lCancelFrames - 1);
     fighter.fastFallInputFrames = Math.max(0, fighter.fastFallInputFrames - 1);
     fighter.smashDirectionFrames = Math.max(0, fighter.smashDirectionFrames - 1);
     if (fighter.smashDirectionFrames === 0) this.clearSmashDirection(fighter);
@@ -2259,6 +2313,7 @@ export class CombatGame {
       } else if (fighter.jumpsRemaining > 0) {
         fighter.jumpsRemaining -= 1;
         fighter.shortHopReleaseFrames = 0;
+        fighter.shortHopAirtime = false;
         fighter.velocity.y = jumpSpeedForMinimumRise(
           fighter.definition.doubleJumpSpeed,
           fighter.definition.gravity,
@@ -2438,6 +2493,7 @@ export class CombatGame {
         ? initialDirection
         : null,
       appliedSelfDamage: false,
+      damageScale: AERIAL_NORMALS.has(name) && fighter.shortHopAirtime ? SHORT_HOP_AERIAL_DAMAGE_SCALE : 1,
     };
     if (move.projectile?.detonatesOnChargeRelease) {
       this.spawnProjectile(fighter, name, move);
@@ -2797,8 +2853,7 @@ export class CombatGame {
       input.held.has("jump") &&
       fighter.velocity.y <= 0 &&
       fighter.hitstunFrames === 0 &&
-      fighter.dodgeFrames === 0 &&
-      !fighter.airDodgeHelpless
+      fighter.dodgeFrames === 0
     );
     fighter.floating = canFloat;
     if (canFloat) {
@@ -2908,11 +2963,6 @@ export class CombatGame {
           fighter.hitstunFrames > 0 &&
           fighter.techable &&
           fighter.techWindowFrames > 0;
-        const lCancelled = Boolean(
-          landingAction &&
-          AERIAL_NORMALS.has(landingAction.name) &&
-          fighter.lCancelFrames > 0,
-        );
         fighter.position.y = platformTop(landing, fighter.position.x) + halfHeight;
         fighter.velocity.y = 0;
         fighter.launchVelocity.y = 0;
@@ -2928,9 +2978,9 @@ export class CombatGame {
         fighter.fastFalling = false;
         fighter.fastFallInputFrames = 0;
         fighter.shortHopReleaseFrames = 0;
+        fighter.shortHopAirtime = false;
         fighter.airUpSpecialUsed = false;
         fighter.airDodgeUsed = false;
-        fighter.airDodgeHelpless = false;
         fighter.coyoteFrames = 0;
         if (teching) {
           this.startGroundTech(fighter, input);
@@ -2942,15 +2992,10 @@ export class CombatGame {
           fighter.state = "crouch";
         } else if (landingAction && AERIAL_NORMALS.has(landingAction.name)) {
           const landingAttack = fighter.definition.attacks[landingAction.name];
-          fighter.landingLagFrames = aerialLandingLagFrames(
-            landingAttack,
-            landingAction.frame,
-            lCancelled,
-          );
+          fighter.landingLagFrames = aerialLandingLagFrames(landingAttack, landingAction.frame);
           fighter.action = null;
           fighter.state = "crouch";
         }
-        fighter.lCancelFrames = 0;
         if (wasAirborne) {
           if (
             landingAction &&
@@ -2963,9 +3008,8 @@ export class CombatGame {
             slot: fighter.slot,
             position: cloneVec(fighter.position),
             impactSpeed,
-            lCancelled,
             wavedash,
-            sound: lCancelled ? "l-cancel" : wavedash ? "wavedash" : "land",
+            sound: wavedash ? "wavedash" : "land",
           });
         }
         if (
@@ -3130,13 +3174,13 @@ export class CombatGame {
         continue;
       }
       fighter.ledge = side;
+      fighter.shortHopAirtime = false;
       fighter.state = "ledge";
       fighter.grounded = false;
       fighter.supportPlatform = null;
       fighter.action = null;
       fighter.airUpSpecialUsed = false;
       fighter.airDodgeUsed = false;
-      fighter.airDodgeHelpless = false;
       fighter.velocity = { x: 0, y: 0 };
       this.clearLaunchVelocity(fighter);
       fighter.ledgeHangFrames = LEDGE_MAX_HANG_FRAMES;
@@ -3331,19 +3375,25 @@ export class CombatGame {
     fighter.state = "dodge";
     fighter.action = null;
     this.clearLaunchVelocity(fighter);
-    fighter.dodgeFrames = airborne ? 49 : 25;
-    fighter.invulnerableFrames = airborne ? 26 : 15;
+    fighter.dodgeFrames = 25;
+    fighter.invulnerableFrames = 15;
     if (airborne) {
+      // Ultimate's air dodge: one per airtime (back on landing, a ledge grab
+      // or a hit), no helpless fall afterwards. A directional dodge travels
+      // but is shorter-lived intangibility and longer to recover from.
+      const magnitude = Math.hypot(direction.x, direction.y);
+      const directional = magnitude > 0.2;
       fighter.dodgeKind = "air";
       fighter.airDodgeUsed = true;
-      fighter.airDodgeHelpless = true;
-      const magnitude = Math.hypot(direction.x, direction.y);
+      fighter.dodgeFrames = directional ? DIRECTIONAL_AIR_DODGE_FRAMES : NEUTRAL_AIR_DODGE_FRAMES;
+      fighter.invulnerableFrames = directional
+        ? DIRECTIONAL_AIR_DODGE_INTANGIBLE_FRAMES
+        : NEUTRAL_AIR_DODGE_INTANGIBLE_FRAMES;
       const boost =
         fighter.definition.runSpeed * fighter.speedMultiplier * AIR_DODGE_SPEED_MULTIPLIER;
-      fighter.velocity =
-        magnitude > 0.2
-          ? { x: direction.x * boost, y: direction.y * boost }
-          : { x: 0, y: 0 };
+      fighter.velocity = directional
+        ? { x: direction.x / magnitude * boost, y: direction.y / magnitude * boost }
+        : { x: 0, y: 0 };
       fighter.fastFalling = false;
     } else {
       if (Math.abs(direction.x) <= 0.15) {
@@ -3525,6 +3575,10 @@ export class CombatGame {
     fighter.percent = 0;
     fighter.state = "respawn";
     fighter.respawnFrames = 45;
+    fighter.shortHopAirtime = false;
+    fighter.shortHopAerialQueued = false;
+    fighter.shieldDropFrames = 0;
+    fighter.parryFrames = 0;
     fighter.grounded = false;
     fighter.supportPlatform = null;
     fighter.jumpsRemaining = fighter.definition.maxJumps;
@@ -3534,7 +3588,6 @@ export class CombatGame {
     fighter.floating = false;
     fighter.airUpSpecialUsed = false;
     fighter.airDodgeUsed = false;
-    fighter.airDodgeHelpless = false;
     fighter.analogRunning = false;
     fighter.invulnerableFrames = 120;
     fighter.action = null;
@@ -3559,7 +3612,6 @@ export class CombatGame {
     fighter.shortHopReleaseFrames = 0;
     fighter.landingLagFrames = 0;
     fighter.wavedashFrames = 0;
-    fighter.lCancelFrames = 0;
     this.clearBufferedAction(fighter);
     this.clearSmashDirection(fighter);
     fighter.dashFrames = 0;
@@ -3840,7 +3892,7 @@ export class CombatGame {
       const { damageScale, launchScale, launchMove, intermediate } = meleeHitScaling(
         effectiveMove,
         hitbox,
-        chargeDamageScale(move, action.chargeFrames),
+        chargeDamageScale(move, action.chargeFrames) * action.damageScale,
         landedHits + 1,
       );
       this.resolveAttackHit(
@@ -3858,12 +3910,45 @@ export class CombatGame {
     }
   }
 
+  /**
+   * Ultimate's parry: a hit just after letting go of shield does nothing to
+   * the shield; the parrying fighter is free at once while a melee attacker
+   * stays frozen.
+   */
+  private parry(
+    attacker: FighterRuntime,
+    target: FighterRuntime,
+    move: AttackDefinition,
+    moveName: MoveName,
+    source: GameEvent["source"],
+  ): void {
+    target.parryFrames = 0;
+    target.shieldDropFrames = 0;
+    const freeze = Math.ceil(move.hitstop * 0.7);
+    target.hitstopFrames = Math.max(target.hitstopFrames, freeze);
+    if (source === "melee") {
+      attacker.hitstopFrames = Math.max(attacker.hitstopFrames, freeze + PARRY_ATTACKER_EXTRA_FREEZE_FRAMES);
+    }
+    this.emit({
+      type: "parry",
+      slot: target.slot,
+      target: attacker.slot,
+      move: moveName,
+      position: cloneVec(target.position),
+      source,
+      sound: "parry",
+    });
+  }
+
   private refreshRecoveryAfterAirHit(target: FighterRuntime): void {
     if (target.grounded) return;
     // A defender knocked out of an aerial resource gets one route back to the
     // stage without replenishing every bonus jump owned by floaty fighters.
     target.jumpsRemaining = Math.max(target.jumpsRemaining, 1);
     target.airUpSpecialUsed = false;
+    // As in Ultimate, being hit gives back the air dodge.
+    target.airDodgeUsed = false;
+    target.shortHopAirtime = false;
   }
 
   private resolveAttackHit(
@@ -3916,6 +4001,10 @@ export class CombatGame {
         );
         return;
       }
+    }
+    if (!move.commandGrab && target.parryFrames > 0) {
+      this.parry(attacker, target, move, moveName, source);
+      return;
     }
     if (!move.commandGrab && target.state === "shield" && target.shield > 0) {
       const shieldDamage = move.shieldDamage * damageScale * attacker.damageMultiplier;
@@ -4239,6 +4328,8 @@ export class CombatGame {
   ): void {
     this.refreshRecoveryAfterAirHit(target);
     this.releaseGrabRelations(target);
+    target.shieldDropFrames = 0;
+    target.parryFrames = 0;
     if (target.statusEffect) {
       target.statusResistanceFrames = Math.max(
         target.statusResistanceFrames,

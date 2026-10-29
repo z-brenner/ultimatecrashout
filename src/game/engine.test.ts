@@ -445,7 +445,7 @@ describe("landing and movement techniques", () => {
     expect(snapshot.fighters[0].velocity.x).toBeGreaterThan(300);
   });
 
-  const landingLag = (lCancel: boolean): {
+  const landingLag = (shieldBeforeLanding: boolean): {
     lagFrames: number;
     landing: GameEvent | undefined;
   } => {
@@ -458,7 +458,7 @@ describe("landing and movement techniques", () => {
       createEmptyInput(),
     ]);
     let snapshot = game.getSnapshot();
-    if (lCancel) {
+    if (shieldBeforeLanding) {
       for (let frame = 0; frame < 40; frame += 1) {
         const fighter = snapshot.fighters[0];
         if (fighter.velocity.y < 0 && fighter.position.y < 92) break;
@@ -485,16 +485,15 @@ describe("landing and movement techniques", () => {
   it("converts an aerial into bounded landing lag", () => {
     const result = landingLag(false);
     expect(result.landing?.impactSpeed).toBeGreaterThan(0);
-    expect(result.landing?.lCancelled).toBe(false);
     expect(result.lagFrames).toBeGreaterThanOrEqual(6);
     expect(result.lagFrames).toBeLessThanOrEqual(16);
   });
 
-  it("halves aerial landing lag when shield is timed before contact", () => {
+  it("has no L-cancel: shield timed before contact leaves aerial landing lag alone", () => {
     const normal = landingLag(false);
-    const cancelled = landingLag(true);
-    expect(cancelled.landing?.lCancelled).toBe(true);
-    expect(cancelled.lagFrames).toBeLessThan(normal.lagFrames);
+    const shielded = landingLag(true);
+    expect(shielded.landing).toBeDefined();
+    expect(shielded.lagFrames).toBe(normal.lagFrames);
   });
 });
 
@@ -1074,18 +1073,14 @@ describe("authored move timing", () => {
     expect(AUTO_CANCEL_LANDING_FRAMES).toBeLessThan(landingLagFramesForAttack(nair));
   });
 
-  it("never lets an auto-cancel window make an L-cancel worse", () => {
+  it("lands an aerial with its own lag, or the auto-cancel landing inside its window", () => {
     const nair = getFighterDefinition("kaykit-knight").attacks["neutral-air"];
     const shortLag = { ...nair, landingLag: 6, autoCancel: { after: 10 } };
-    // In the window: L-cancel (3) beats the auto-cancel landing (4).
-    expect(aerialLandingLagFrames(shortLag, 12, true)).toBe(3);
-    expect(aerialLandingLagFrames(shortLag, 12, false)).toBe(AUTO_CANCEL_LANDING_FRAMES);
-    // Outside the window only the L-cancel applies.
-    expect(aerialLandingLagFrames(shortLag, 5, true)).toBe(3);
-    expect(aerialLandingLagFrames(shortLag, 5, false)).toBe(6);
-    // A long landing lag: auto-cancel (4) beats the L-cancel (10).
-    const longLag = { ...nair, landingLag: 20, autoCancel: { after: 10 } };
-    expect(aerialLandingLagFrames(longLag, 12, true)).toBe(AUTO_CANCEL_LANDING_FRAMES);
+    expect(aerialLandingLagFrames(shortLag, 12)).toBe(AUTO_CANCEL_LANDING_FRAMES);
+    expect(aerialLandingLagFrames(shortLag, 5)).toBe(6);
+    // An auto-cancel landing never lengthens a move's own shorter lag.
+    const tinyLag = { ...nair, landingLag: 2, autoCancel: { after: 10 } };
+    expect(aerialLandingLagFrames(tinyLag, 12)).toBe(Math.min(2, AUTO_CANCEL_LANDING_FRAMES));
   });
 
   it("reads move frame windows inclusively", () => {

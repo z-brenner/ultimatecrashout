@@ -130,8 +130,8 @@ describe("local audio engine", () => {
     audio.cue("swing-light");
     audio.cue("swing-heavy");
     audio.cue("special");
-    audio.cue("l-cancel");
     audio.cue("wavedash");
+    audio.cue("parry");
 
     const sources = players.map((player) => player.source);
     expect(sources).toContain(LOCAL_AUDIO_SAMPLES.bootIntro);
