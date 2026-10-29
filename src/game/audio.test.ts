@@ -209,6 +209,50 @@ describe("local audio engine", () => {
       for (let index = 1; index < sources.length; index += 1) expect(sources[index]).not.toBe(sources[index - 1]);
     });
 
+    it("does not count a variant dropped inside the gap as heard", () => {
+      let time = 0;
+      vi.spyOn(performance, "now").mockImplementation(() => time);
+      const rolls = [0, 0.99, 0];
+      const { audio, players } = harness(() => rolls.shift() ?? 0);
+      audio.fighterCue("buckle", "hurt", 0); // plays variant 0
+      time = 50;
+      audio.fighterCue("buckle", "hurt", 0); // picks another variant, but inside the gap: dropped
+      time = 1_000;
+      audio.fighterCue("buckle", "hurt", 0); // must still avoid variant 0
+      expect(players.map(({ source }) => source)).toEqual([buckle.hurt![0], buckle.hurt![1]]);
+    });
+
+    it("gives two players on the same fighter separate voices", () => {
+      vi.spyOn(performance, "now").mockReturnValue(5_000);
+      const { audio, players } = harness();
+      audio.fighterCue("buckle", "hurt", 0);
+      audio.fighterCue("buckle", "hurt", 1);
+      expect(players).toHaveLength(2);
+    });
+
+    it("does not repeat an attack file when a smash borrows the attack files", async () => {
+      vi.resetModules();
+      vi.doMock("./generated/openFighterRegistry", async (importOriginal) => ({
+        ...(await importOriginal<typeof import("./generated/openFighterRegistry")>()),
+        OPEN_FIGHTER_AUDIO: { buckle: { attack: ["/a1.ogg", "/a2.ogg"] } },
+      }));
+      const { createAudioEngine: createFresh } = await import("./audio");
+      vi.doUnmock("./generated/openFighterRegistry");
+      spacedOut();
+      const sources: string[] = [];
+      const audio = createFresh({
+        random: () => 0,
+        audioFactory: (source) => {
+          sources.push(source);
+          return new FakeAudio(source) as unknown as HTMLAudioElement;
+        },
+      });
+      audio.fighterCue("buckle", "attack", 0);
+      audio.fighterCue("buckle", "smash", 0);
+      audio.fighterCue("buckle", "taunt", 0);
+      expect(sources).toEqual(["/a1.ogg", "/a2.ogg", "/a1.ogg"]);
+    });
+
     it("does not let a repeat inside a cue's gap through", () => {
       vi.spyOn(performance, "now").mockReturnValue(5_000);
       const { audio, players } = harness();
@@ -218,7 +262,8 @@ describe("local audio engine", () => {
       expect(players.map(({ source }) => source)).toEqual([expect.stringContaining("hurt"), buckle.ko![0]]);
     });
 
-    it("preloads each file once, without playing it", () => {
+    it("preloads each file once, without playing it, and plays it first from that element", () => {
+      spacedOut();
       const { audio, players } = harness();
       audio.preloadFighters(["buckle", "george", "buckle"]);
       const files = new Set(Object.values(buckle).flat());
@@ -227,6 +272,15 @@ describe("local audio engine", () => {
         .toBe(true);
       audio.preloadFighters(["buckle"]);
       expect(players).toHaveLength(files.size);
+
+      // The first play reuses the loaded element; an overlapping one gets its own.
+      audio.fighterCue("buckle", "ko", 0);
+      const ko = players.find(({ source }) => source === buckle.ko![0])!;
+      expect(ko.play).toHaveBeenCalledTimes(1);
+      expect(players).toHaveLength(files.size);
+      audio.fighterCue("buckle", "ko", 1);
+      expect(players).toHaveLength(files.size + 1);
+      expect(players.at(-1)!.source).toBe(buckle.ko![0]);
     });
   });
 

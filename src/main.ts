@@ -353,7 +353,7 @@ const eventStrength = (event: GameEvent): number => {
 const playEvents = (events: readonly GameEvent[], snapshot: GameSnapshot): void => {
   const fighterIn = (slot: PlayerSlot) => snapshot.fighters[slot]?.fighter;
   for (const event of events) {
-    for (const [fighter, cue] of fighterCuesForEvent(event, fighterIn)) audio.fighterCue(fighter, cue);
+    for (const [fighter, cue, slot] of fighterCuesForEvent(event, fighterIn)) audio.fighterCue(fighter, cue, slot);
     switch (event.type) {
       case "attack":
         audio.cue(event.sound);
@@ -373,7 +373,7 @@ const playEvents = (events: readonly GameEvent[], snapshot: GameSnapshot): void 
         audio.cue("shield-break");
         break;
       case "jump":
-        if (event.slot === undefined) audio.jump();
+        if (event.slot === undefined || !fighterIn(event.slot)) audio.jump();
         break;
       case "land":
         audio.cue(event.sound ?? "land");

@@ -6,7 +6,9 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -92,6 +94,16 @@ describe("stage pack CLI", () => {
     writeFileSync(stagePath, `${JSON.stringify(stage, null, 2)}\n`);
 
     expect(() => runCli(workspace, "build")).toThrow(/escapes the stage pack/);
+  });
+
+  it("rejects assets reached through a symlinked folder outside its pack", () => {
+    const workspace = createWorkspace();
+    const assets = join(workspace.packs, "verdant-grove/assets");
+    const outside = join(workspace.root, "outside-assets");
+    renameSync(assets, outside);
+    symlinkSync(outside, assets);
+
+    expect(() => runCli(workspace, "build")).toThrow(/escapes the stage pack through a symbolic link/);
   });
 
   it("detects a stale generated registry", () => {

@@ -5,7 +5,9 @@ import {
   access,
   lstat,
   mkdir,
+  open,
   readFile,
+  realpath,
   readdir,
   rename,
   writeFile,
@@ -499,6 +501,8 @@ const validateAudio = async (pack, directory) => {
   assert(audio.license.url === undefined || validUrl(audio.license.url), `${id}: invalid audio.license.url`);
   assert(isObject(audio.cues) && Object.keys(audio.cues).length > 0, `${id}: audio.cues must name at least one cue`);
   const cueNames = Object.keys(FIGHTER_AUDIO_CUES);
+  // Real paths, so a symlinked folder inside the pack cannot reach outside it.
+  const packRealPath = await realpath(directory);
   const resolved = {};
   const sizes = new Map();
   for (const [cue, files] of Object.entries(audio.cues)) {
@@ -514,16 +518,26 @@ const validateAudio = async (pack, directory) => {
         `${id}: ${at} must be a relative path with / separators`);
       const absolute = resolve(directory, file);
       assert(absolute.startsWith(`${directory}${sep}`), `${id}: ${at} escapes the fighter pack`);
-      const extension = extname(file).toLowerCase();
-      assert(extensions.includes(extension), `${id}: ${at} must be one of ${extensions.join(", ")}`);
+      const extension = extname(file);
+      assert(extensions.includes(extension), `${id}: ${at} must end in one of ${extensions.join(", ")} (lowercase)`);
+      resolved[cue].push(absolute);
+      if (sizes.has(absolute)) continue;
       const info = await lstat(absolute).catch(() => null);
       assert(info?.isFile() && !info.isSymbolicLink(), `${id}: ${at} (${file}) is missing or not a regular file`);
+      const real = await realpath(absolute);
+      assert(real.startsWith(`${packRealPath}${sep}`), `${id}: ${at} escapes the fighter pack through a symbolic link`);
       assert(info.size <= maxFileBytes,
         `${id}: ${file} is ${Math.ceil(info.size / 1024)} KiB; a cue file may be at most ${maxFileBytes / 1024} KiB`);
-      const bytes = await readFile(absolute);
-      assert(audioMatchesExtension(bytes, extension), `${id}: ${file} is not a valid ${extension} file`);
+      // The format check needs only the first bytes.
+      const handle = await open(absolute);
+      const header = Buffer.alloc(12);
+      try {
+        await handle.read(header, 0, header.length, 0);
+      } finally {
+        await handle.close();
+      }
+      assert(audioMatchesExtension(header, extension), `${id}: ${file} is not a valid ${extension} file`);
       sizes.set(absolute, info.size);
-      resolved[cue].push(absolute);
     }
   }
   const total = [...sizes.values()].reduce((sum, size) => sum + size, 0);
@@ -574,18 +588,24 @@ const generatedOutputs = ({ config, loaded }) => {
   const packs = ready.map(({ pack }) => pack);
   const ids3D = packs.filter(({ kind }) => kind === "3d").map(({ id }) => id);
   const ids2D = packs.filter(({ kind }) => kind === "2d").map(({ id }) => id);
-  // Cue files are imported with ?url so Vite fingerprints and bundles them.
+  // Cue files are imported with ?url so Vite fingerprints and bundles them;
+  // a file serving several cues is imported once.
   const imports = [];
+  const identifiers = new Map();
+  const importAudio = (absolute) => {
+    if (!identifiers.has(absolute)) {
+      let importPath = relative(dirname(registryOut), absolute).split(sep).join("/");
+      if (!importPath.startsWith(".")) importPath = `./${importPath}`;
+      const identifier = `fighterAudio${identifiers.size}`;
+      identifiers.set(absolute, identifier);
+      imports.push(`import ${identifier} from ${JSON.stringify(`${importPath}?url`)};`);
+    }
+    return identifiers.get(absolute);
+  };
   const audio = Object.fromEntries(ready
     .filter(({ audio: cues }) => Object.keys(cues).length > 0)
     .map(({ pack, audio: cues }) => [pack.id, Object.fromEntries(Object.entries(cues).map(([cue, files]) =>
-      [cue, files.map((absolute) => {
-        let importPath = relative(dirname(registryOut), absolute).split(sep).join("/");
-        if (!importPath.startsWith(".")) importPath = `./${importPath}`;
-        const identifier = `fighterAudio${imports.length}`;
-        imports.push(`import ${identifier} from ${JSON.stringify(`${importPath}?url`)};`);
-        return identifier;
-      })]))]));
+      [cue, files.map(importAudio)]))]));
   const audioLiteral = `{${Object.entries(audio).map(([id, cues]) => `\n  ${JSON.stringify(id)}: {${
     Object.entries(cues).map(([cue, identifiers]) => `\n    ${cue}: [${identifiers.join(", ")}],`).join("")
   }\n  },`).join("")}${Object.keys(audio).length > 0 ? "\n" : ""}}`;

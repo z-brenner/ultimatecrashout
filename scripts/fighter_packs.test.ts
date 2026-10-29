@@ -6,6 +6,7 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -317,7 +318,9 @@ describe("fighter pack CLI", () => {
     expect(registry).toMatch(/import fighterAudio0 from "[./]*\/?.*fighters\/rgs-stick\/audio\/swing-1\.ogg\?url";/);
     expect(registry).toContain("attack: [fighterAudio0, fighterAudio1],");
     expect(registry).toContain("hurt: [fighterAudio2],");
-    expect(registry).toContain("taunt: [fighterAudio3],");
+    // A file serving two cues is imported once.
+    expect(registry).toContain("taunt: [fighterAudio0],");
+    expect(registry.match(/swing-1\.ogg\?url/g)).toHaveLength(1);
   });
 
   it("emits an empty audio table when no pack has sounds", () => {
@@ -337,7 +340,8 @@ describe("fighter pack CLI", () => {
     [voiced({ attack: "audio/a.ogg" }), "audio.cues.attack must list 1-4 files"],
     [voiced({ attack: ["audio/a.ogg", "audio/a.ogg"] }), "audio.cues.attack lists a file twice"],
     [voiced({ attack: ["../rgs-stick/audio/a.ogg", "../../escape.ogg"] }), "audio.cues.attack[1] escapes the fighter pack"],
-    [voiced({ attack: ["audio/a.flac"] }), "audio.cues.attack[0] must be one of .ogg, .mp3, .m4a, .wav"],
+    [voiced({ attack: ["audio/a.flac"] }), "audio.cues.attack[0] must end in one of .ogg, .mp3, .m4a, .wav"],
+    [voiced({ attack: ["audio/A.OGG"] }), "audio.cues.attack[0] must end in one of .ogg, .mp3, .m4a, .wav (lowercase)"],
     [voiced({ attack: ["audio/missing.ogg"] }), "audio.cues.attack[0] (audio/missing.ogg) is missing"],
     [voiced({ attack: ["audio/fake.ogg"] }), "audio/fake.ogg is not a valid .ogg file"],
     [voiced({ attack: ["audio/huge.ogg"] }), "audio/huge.ogg is 300 KiB; a cue file may be at most 256 KiB"],
@@ -355,5 +359,15 @@ describe("fighter pack CLI", () => {
       ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((index) => [`b${index}.ogg`, big])),
     });
     expect(() => runCli(workspace, "build")).toThrow(message);
+  });
+
+  it("rejects sounds reached through a symlinked folder outside the pack", () => {
+    const workspace = createWorkspace();
+    const outside = join(workspace.root, "outside");
+    mkdirSync(outside);
+    writeFileSync(join(outside, "secret.ogg"), ogg());
+    const fighterDirectory = writeVoicedPack(workspace, voiced({ attack: ["linked/secret.ogg"] }));
+    symlinkSync(outside, join(fighterDirectory, "linked"));
+    expect(() => runCli(workspace, "build")).toThrow("audio.cues.attack[0] escapes the fighter pack through a symbolic link");
   });
 });

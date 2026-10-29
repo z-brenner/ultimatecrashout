@@ -9,30 +9,33 @@ export const HURT_CUE_MIN_DAMAGE = 5;
 const attackCue = (move: GameEvent["move"]): FighterAudioCue =>
   move?.endsWith("smash") ? "smash" : move?.endsWith("special") ? "special" : "attack";
 
+export type FighterCueTrigger = [fighter: FighterId, cue: FighterAudioCue, slot: PlayerSlot];
+
 /**
- * The per-fighter sound cues a game event triggers, as [fighter, cue] pairs.
- * `fighterIn` maps a player slot to the fighter playing it.
+ * The per-fighter sound cues a game event triggers, with the slot whose
+ * fighter speaks. `fighterIn` maps a player slot to the fighter playing it.
  */
 export const fighterCuesForEvent = (
   event: GameEvent,
   fighterIn: (slot: PlayerSlot) => FighterId | undefined,
-): Array<[FighterId, FighterAudioCue]> => {
-  const actor = event.slot === undefined ? undefined : fighterIn(event.slot);
+): FighterCueTrigger[] => {
+  const by = (slot: PlayerSlot | undefined, cue: FighterAudioCue): FighterCueTrigger[] => {
+    const fighter = slot === undefined ? undefined : fighterIn(slot);
+    return fighter && slot !== undefined ? [[fighter, cue, slot]] : [];
+  };
   switch (event.type) {
     case "attack":
-      return actor ? [[actor, attackCue(event.move)]] : [];
+      return by(event.slot, attackCue(event.move));
     case "jump":
     case "taunt":
     case "ko":
-      return actor ? [[actor, event.type]] : [];
+      return by(event.slot, event.type);
     case "match-end":
-      return actor ? [[actor, "victory"]] : [];
+      return by(event.slot, "victory");
     case "hit": {
       // The fighter who was hit reacts, unless armor absorbed the flinch.
-      const target = event.target === undefined ? undefined : fighterIn(event.target);
-      const hurts = target && !event.armored && event.sound !== "water-push" &&
-        (event.damage ?? 0) >= HURT_CUE_MIN_DAMAGE;
-      return hurts ? [[target, "hurt"]] : [];
+      const hurts = !event.armored && event.sound !== "water-push" && (event.damage ?? 0) >= HURT_CUE_MIN_DAMAGE;
+      return hurts ? by(event.target, "hurt") : [];
     }
     default:
       return [];

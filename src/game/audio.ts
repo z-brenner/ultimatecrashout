@@ -115,18 +115,31 @@ const CUE_PLAYBACK: Readonly<Record<FighterAudioCue, readonly [gain: number, gap
 };
 
 /**
- * The files a cue can play for a fighter: the pack's own (fighter.json
- * audio.cues), else its fallback cue's, else the shared sample, else none.
+ * Where a cue's sound comes from: the fighter's own files for it (fighter.json
+ * audio.cues), else for its fallback cues, else the shared sample along the
+ * same chain. `cue` is the cue that supplied the files.
  */
-export const fighterCueSources = (fighter: FighterId, cue: FighterAudioCue): readonly string[] => {
+const resolveFighterCue = (
+  fighter: FighterId,
+  cue: FighterAudioCue,
+): { cue: FighterAudioCue; sources: readonly string[] } | null => {
+  const chain: FighterAudioCue[] = [];
+  for (let current: FighterAudioCue | undefined = cue; current; current = CUE_FALLBACK[current]) chain.push(current);
   const own = OPEN_FIGHTER_AUDIO[fighter];
-  for (let current: FighterAudioCue | undefined = cue; current; current = CUE_FALLBACK[current]) {
+  for (const current of chain) {
     const files = own?.[current];
-    if (files && files.length > 0) return files;
+    if (files && files.length > 0) return { cue: current, sources: files };
   }
-  const shared = SHARED_FIGHTER_AUDIO[cue] ?? SHARED_FIGHTER_AUDIO[CUE_FALLBACK[cue] ?? cue];
-  return shared ? [shared] : [];
+  for (const current of chain) {
+    const shared = SHARED_FIGHTER_AUDIO[current];
+    if (shared) return { cue: current, sources: [shared] };
+  }
+  return null;
 };
+
+/** The files a cue can play for a fighter (none: the cue is silent). */
+export const fighterCueSources = (fighter: FighterId, cue: FighterAudioCue): readonly string[] =>
+  resolveFighterCue(fighter, cue)?.sources ?? [];
 
 /** Every distinct file a fighter's cues can play, for preloading. */
 export const fighterAudioFiles = (fighter: FighterId): readonly string[] =>
@@ -349,14 +362,23 @@ export class GameAudio {
   ready(): void { this.playSample(LOCAL_AUDIO_SAMPLES.ready, 1, "announcer-ready", 500); }
   countdown(count: number): void { this.playSfx("countdown", { count }); }
 
-  fighterCue(fighter: FighterId, cue: FighterAudioCue): void {
-    const sources = fighterCueSources(fighter, cue);
-    if (sources.length === 0) return;
-    const key = `${fighter}-${cue}`;
+  /**
+   * Plays one of the fighter's files for `cue`. `voice` (the player slot)
+   * keeps two players on the same fighter apart: each has its own repeat
+   * gap and variant history.
+   */
+  fighterCue(fighter: FighterId, cue: FighterAudioCue, voice: number | "ui" = "ui"): void {
+    const resolved = resolveFighterCue(fighter, cue);
+    if (!resolved) return;
     const [gain, gapMs] = CUE_PLAYBACK[cue];
-    const index = pickVariant(sources.length, this.lastVariant.get(key) ?? -1, this.random);
-    this.lastVariant.set(key, index);
-    this.playSample(sources[index]!, gain, key, gapMs);
+    const speaker = `${fighter}@${voice}`;
+    // History follows the files, so a smash borrowing attack files does not
+    // repeat the attack just heard.
+    const history = `${speaker}-${resolved.cue}`;
+    const index = pickVariant(resolved.sources.length, this.lastVariant.get(history) ?? -1, this.random);
+    if (this.playSample(resolved.sources[index]!, gain, `${speaker}-${cue}`, gapMs)) {
+      this.lastVariant.set(history, index);
+    }
   }
 
   announceFighter(fighter: FighterId): void {
@@ -364,8 +386,9 @@ export class GameAudio {
   }
 
   /**
-   * Starts fetching the fighters' own cue files, so the first swing of a
-   * match is not late. The shared samples are small and cached after one use.
+   * Loads the fighters' own cue files, so the first swing of a match is not
+   * late: a file's first play uses its preloaded element. The shared samples
+   * are small and cached after one use.
    */
   preloadFighters(fighters: readonly FighterId[]): void {
     if (this.disposed) return;
@@ -418,6 +441,7 @@ export class GameAudio {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.stopAll();
+    this.preloaded.clear();
     this.disposed = true;
   }
 
@@ -452,14 +476,18 @@ export class GameAudio {
     );
   }
 
-  private playSample(source: string, gain = 1, dedupeKey = source, minimumGapMs = 0): void {
-    if (this.disposed || this.volumes.master <= 0 || this.volumes.effects <= 0) return;
+  /** Whether the sample started (it may be muted, or inside its repeat gap). */
+  private playSample(source: string, gain = 1, dedupeKey = source, minimumGapMs = 0): boolean {
+    if (this.disposed || this.volumes.master <= 0 || this.volumes.effects <= 0) return false;
     const now = typeof performance !== "undefined" ? performance.now() : Date.now();
     const previous = this.lastCueAt.get(dedupeKey) ?? Number.NEGATIVE_INFINITY;
-    if (now - previous < minimumGapMs) return;
+    if (now - previous < minimumGapMs) return false;
     this.lastCueAt.set(dedupeKey, now);
-    const player = this.audioFactory(source);
-    if (!player) return;
+    // A preloaded element already holds the data; use it unless it is busy.
+    const preloaded = this.preloaded.get(source);
+    const player = preloaded && !this.effectPlayers.has(preloaded) ? preloaded : this.audioFactory(source);
+    if (!player) return false;
+    if (player === preloaded) player.currentTime = 0;
     player.preload = "auto";
     player.volume = clamp(this.volumes.master * this.volumes.effects * gain);
     this.effectPlayers.add(player);
@@ -468,6 +496,7 @@ export class GameAudio {
     };
     player.addEventListener("ended", cleanup, { once: true });
     void player.play().catch(cleanup);
+    return true;
   }
 
   private countdownSample(count: number): string {
