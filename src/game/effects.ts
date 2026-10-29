@@ -16,6 +16,7 @@ import {
   type ProjectileDefinition,
   type Vec2,
 } from "./roster";
+import { SLOT_COLORS } from "./finisher";
 import { OPEN_FIGHTER_PACKS } from "./generated/openFighterRegistry";
 
 export const MAX_EFFECT_PARTICLES = 384;
@@ -595,8 +596,10 @@ export class CombatEffects {
           break;
         case "ko": {
           const direction = normalize(event.velocity ?? this.targetVelocity(snapshot, event.slot), { x: event.slot === 0 ? -1 : 1, y: 0.25 });
-          this.addTransient("ko-beam", position, direction, 120, "#ffd95f", "#ffffff", "screen", 0.72, 5, "heavy");
-          this.spawnRadial(position, 34, "#ffe16d", "star", 1.35, 4);
+          // The blast is in the colour of the player who was KO'd, as in Smash.
+          const blast = event.slot === undefined ? "#ffd95f" : SLOT_COLORS[event.slot];
+          this.addTransient("ko-beam", position, direction, 120, blast, "#ffffff", "screen", 0.72, 5, "heavy");
+          this.spawnRadial(position, 34, blast, "star", 1.35, 4);
           shake = Math.max(shake, 32);
           flash = Math.max(flash, 0.8);
           flashColor = "#ffffff";
@@ -987,9 +990,13 @@ export class CombatEffects {
       if (effect.layer !== layer) continue;
       const progress = 1 - effect.life / effect.maxLife;
       const alpha = Math.sin(Math.PI * clamp(progress, 0, 1));
-      const screen = view.worldToScreen(effect.position);
+      let screen = view.worldToScreen(effect.position);
+      if (effect.kind === "ko-beam") {
+        // KOs happen off-screen: fire the blast from where the launch left the view.
+        screen = projectKoBeamOrigin(screen, { x: effect.direction.x, y: -effect.direction.y }, view.width, view.height);
+      }
       const size = effect.size * (layer === "screen" ? 1 : view.zoom);
-      this.drawTransient(ctx, effect, screen, size, alpha);
+      this.drawTransient(ctx, effect, screen, size, alpha, Math.hypot(view.width, view.height));
     }
     ctx.restore();
   }
@@ -1051,17 +1058,54 @@ export class CombatEffects {
     screen: Vec2,
     size: number,
     alpha: number,
+    viewDiagonal: number,
   ): void {
     ctx.save();
     ctx.translate(screen.x, screen.y);
     ctx.rotate(Math.atan2(-effect.direction.y, effect.direction.x));
     ctx.globalAlpha = alpha;
     ctx.globalCompositeOperation = "lighter";
+    if (effect.kind === "ko-beam") {
+      // A column of light firing back across the screen from the blast line,
+      // widening as it goes, with a white-hot core.
+      const length = viewDiagonal * 0.8;
+      // Painted, not added: additive light washes the player colour out to
+      // white over a bright sky. Only the core glows.
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = alpha * 0.9;
+      const column = ctx.createLinearGradient(0, 0, -length, 0);
+      column.addColorStop(0, effect.color);
+      column.addColorStop(0.5, effect.color);
+      column.addColorStop(1, `${effect.color}00`);
+      ctx.fillStyle = column;
+      ctx.beginPath();
+      ctx.moveTo(size * 0.2, -size * 0.35);
+      ctx.lineTo(-length, -size * 1.5);
+      ctx.lineTo(-length, size * 1.5);
+      ctx.lineTo(size * 0.2, size * 0.35);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = alpha;
+      const core = ctx.createLinearGradient(0, 0, -length * 0.7, 0);
+      core.addColorStop(0, effect.secondary);
+      core.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = core;
+      ctx.beginPath();
+      ctx.moveTo(0, -size * 0.12);
+      ctx.lineTo(-length * 0.7, -size * 0.45);
+      ctx.lineTo(-length * 0.7, size * 0.45);
+      ctx.lineTo(0, size * 0.12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
     ctx.strokeStyle = effect.color;
     ctx.fillStyle = effect.color;
     ctx.lineCap = "round";
     ctx.lineWidth = Math.max(3, size * (effect.tier === "heavy" ? 0.1 : 0.065));
-    if (effect.kind === "ko-beam" || effect.kind === "respawn") {
+    if (effect.kind === "respawn") {
       ctx.beginPath();
       ctx.moveTo(-size * 1.35, 0);
       ctx.lineTo(size * 1.35, 0);

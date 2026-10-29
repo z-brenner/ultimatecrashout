@@ -1,6 +1,7 @@
 import { CpuController } from "./game/ai";
 import { createAudioEngine } from "./game/audio";
 import { fighterCuesForEvent } from "./game/fighterAudioEvents";
+import { GAME_SPLASH_SECONDS, finisherFromEvents } from "./game/finisher";
 import type { MatchConfig, PlayerSlot } from "./game/contracts";
 import { FIXED_DT, createEmptyInput, createGame, type CombatGame, type GameEvent, type GameSnapshot } from "./game/engine";
 import { createGamepadManager, mergeInputFrames } from "./game/gamepad";
@@ -70,6 +71,8 @@ let currentConfig: MatchConfig | null = null;
 let cpuControllers: [CpuController | null, CpuController | null] = [null, null];
 let paused = false;
 let accumulator = 0;
+/** Real seconds of slow motion left after a finishing blow, and the game speed meanwhile. */
+let slowMotion = { seconds: 0, timeScale: 1 };
 let previousTimestamp = performance.now();
 let lastHudUpdate = 0;
 let lastCountdown = -1;
@@ -151,6 +154,7 @@ const stopMatch = (): void => {
   cpuControllers = [null, null];
   paused = false;
   accumulator = 0;
+  slowMotion = { seconds: 0, timeScale: 1 };
   input.clear();
   gamepads.clear();
   input.setEnabled(false);
@@ -172,6 +176,7 @@ const activateMatch = (config: MatchConfig, activeRenderer: GameRenderer): void 
   cpuControllers = buildCpuControllers(config);
   paused = false;
   accumulator = 0;
+  slowMotion = { seconds: 0, timeScale: 1 };
   lastCountdown = -1;
   previousTimestamp = performance.now();
   resetPerformanceSample();
@@ -468,6 +473,7 @@ const finishMatch = (snapshot: GameSnapshot): void => {
   const result = snapshot.result;
   input.setEnabled(false);
   audio.setCombatIntensity(1);
+  // Long enough for the final blow's slow motion and the GAME! splash.
   resultTimer = window.setTimeout(() => {
     resultTimer = null;
     try {
@@ -477,7 +483,7 @@ const finishMatch = (snapshot: GameSnapshot): void => {
     } catch (error) {
       console.error("Could not display the results screen", error);
     }
-  }, 1050);
+  }, GAME_SPLASH_SECONDS * 1000 + 150);
 };
 
 const tick = (timestamp: number): void => {
@@ -507,13 +513,18 @@ const tick = (timestamp: number): void => {
     let snapshot = game.getSnapshot();
 
     if (!paused) {
-      accumulator = Math.min(accumulator + elapsed, FIXED_DT * 6);
+      accumulator = Math.min(accumulator + elapsed * slowMotion.timeScale, FIXED_DT * 6);
+      slowMotion.seconds = Math.max(0, slowMotion.seconds - elapsed);
+      if (slowMotion.seconds === 0) slowMotion.timeScale = 1;
       let firstStep = true;
       while (accumulator >= FIXED_DT && snapshot.phase !== "finished") {
         snapshot = game.step(makeInputs(snapshot, firstStep));
         frameEvents.push(...snapshot.events);
         playEvents(snapshot.events, snapshot);
         updateCountdownAudio(snapshot);
+        // A launch certain to KO plays in slow motion (the renderer punches in).
+        const finisher = finisherFromEvents(snapshot.events, snapshot);
+        if (finisher) slowMotion = { seconds: finisher.timing.seconds, timeScale: finisher.timing.timeScale };
         firstStep = false;
         accumulator -= FIXED_DT;
       }
@@ -526,7 +537,12 @@ const tick = (timestamp: number): void => {
     // consumes each tick immediately; the renderer needs the same accumulated
     // stream or short-lived hits, jumps and dust cues disappear visually.
     renderer?.setDebugHitboxes(showHitboxes ? game.debugActiveHitboxes() : null);
-    renderer?.render({ ...snapshot, events: frameEvents }, paused ? 0 : elapsed, settings);
+    renderer?.render(
+      { ...snapshot, events: frameEvents },
+      paused ? 0 : elapsed * slowMotion.timeScale,
+      settings,
+      paused ? 0 : elapsed,
+    );
     recordPerformanceSample(timestamp, snapshot);
     updateHud(snapshot, timestamp);
     if (snapshot.phase === "finished") finishMatch(snapshot);

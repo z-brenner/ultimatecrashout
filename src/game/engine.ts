@@ -576,6 +576,7 @@ export type GameEventType =
   | "ko"
   | "respawn"
   | "sudden-death"
+  | "launch"
   | "match-end";
 
 export interface GameEvent {
@@ -604,6 +605,8 @@ export interface GameEvent {
   techKind?: "neutral" | "roll-left" | "roll-right" | "wall-left" | "wall-right" | "ceiling";
   winner?: PlayerSlot;
   sound?: string;
+  /** On "launch": the launch carries the target past a blast line before hitstun ends, whatever they do. */
+  predictedKo?: boolean;
 }
 
 export interface GameSnapshot {
@@ -823,6 +826,84 @@ export const decayMeleeLaunchVelocity = (velocity: Vec2): Vec2 => {
   if (speed <= MELEE_LAUNCH_SPEED_DECAY_PER_FRAME) return { x: 0, y: 0 };
   const retained = (speed - MELEE_LAUNCH_SPEED_DECAY_PER_FRAME) / speed;
   return { x: velocity.x * retained, y: velocity.y * retained };
+};
+
+/**
+ * What a launched fighter could meet. A one-way platform is a band of top
+ * heights (`bottom`..`top`: a moving one sweeps through several); a solid
+ * stage volume is a box it cannot enter at all.
+ */
+export interface LaunchSurface {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  solid: boolean;
+}
+
+export interface LaunchKoProbe {
+  position: Vec2;
+  /** The fighter's own velocity, world units per second. */
+  velocity: Vec2;
+  /** Knockback velocity, Melee units per frame (decays separately). */
+  launchVelocity: Vec2;
+  hitstunFrames: number;
+  gravity: number;
+  maxFallSpeed: number;
+  airAcceleration: number;
+  size: { width: number; height: number };
+  blastZone: { left: number; right: number; top: number; bottom: number };
+  surfaces: readonly LaunchSurface[];
+}
+
+/**
+ * Whether a launch KOs for sure: the fighter crosses a blast line before
+ * hitstun ends, even drifting toward the stage the whole way, without
+ * meeting any surface it could land on, tech, or bounce off. It mirrors the
+ * engine's hitstun movement and errs toward "no", so presentation can trust
+ * a "yes" (a later hit or hazard during the flight is the only exception).
+ */
+export const predictLaunchKo = (probe: LaunchKoProbe): boolean => {
+  const { blastZone, size, surfaces } = probe;
+  const stageCenter = (blastZone.left + blastZone.right) / 2;
+  const halfHeight = size.height / 2;
+  // The engine lands on tops with a narrow foot box; walls use the full body.
+  const footHalfWidth = size.width * 0.26;
+  const bodyHalfWidth = size.width / 2;
+  const position = { ...probe.position };
+  const velocity = { ...probe.velocity };
+  let launch = { ...probe.launchVelocity };
+  for (let frame = 0; frame < probe.hitstunFrames; frame += 1) {
+    // Hitstun drift (input during hitstun), always toward the stage.
+    velocity.x -= Math.sign(position.x - stageCenter) * probe.airAcceleration * FIXED_DT * 0.32;
+    velocity.y = Math.max(velocity.y - probe.gravity * FIXED_DT, -probe.maxFallSpeed);
+    const world = meleeLaunchVelocityToWorld(launch);
+    const previousBottom = position.y - halfHeight;
+    position.x += (velocity.x + world.x) * FIXED_DT;
+    position.y += (velocity.y + world.y) * FIXED_DT;
+    const bottom = position.y - halfHeight;
+    for (const surface of surfaces) {
+      const reach = surface.solid ? bodyHalfWidth : footHalfWidth;
+      if (position.x + reach < surface.left || position.x - reach > surface.right) continue;
+      if (surface.solid) {
+        // Touching a solid volume: a landing, tech, wall, or ceiling bounce.
+        if (bottom <= surface.top + 1 && position.y + halfHeight >= surface.bottom) return false;
+      } else if (velocity.y + world.y <= 0 && previousBottom >= surface.bottom - 1 && bottom <= surface.top + 1) {
+        // Falling onto (or through) the platform's band of heights this frame.
+        return false;
+      }
+    }
+    if (
+      position.x < blastZone.left ||
+      position.x > blastZone.right ||
+      position.y < blastZone.bottom ||
+      position.y > blastZone.top
+    ) {
+      return true;
+    }
+    launch = decayMeleeLaunchVelocity(launch);
+  }
+  return false;
 };
 
 interface ProjectileRuntime extends ProjectileSnapshot {
@@ -4041,6 +4122,47 @@ export class CombatGame {
     fighter.hitstopElapsedFrames = 0;
     fighter.sdiRegion = null;
     fighter.asdiDirection = null;
+    // DI and SDI are final: the flight is now known.
+    this.emit({
+      type: "launch",
+      slot: fighter.lastHitBy ?? undefined,
+      target: fighter.slot,
+      position: cloneVec(fighter.position),
+      velocity: this.fighterWorldVelocity(fighter),
+      predictedKo: predictLaunchKo({
+        position: fighter.position,
+        velocity: fighter.velocity,
+        launchVelocity: fighter.launchVelocity,
+        hitstunFrames: fighter.hitstunFrames,
+        gravity: fighter.definition.gravity,
+        maxFallSpeed: fighter.definition.maxFallSpeed,
+        airAcceleration: fighter.definition.airAcceleration,
+        size: fighter.definition.size,
+        blastZone: this.stage.blastZone,
+        surfaces: this.launchSurfaces(),
+      }),
+    });
+  }
+
+  /** Every platform as the KO predictor sees it, moving ones over their whole path. */
+  private launchSurfaces(): LaunchSurface[] {
+    return this.stage.platforms.map((platform) => {
+      const tops = [platformTop(platform, platformLeft(platform)), platformTop(platform, platformRight(platform))];
+      let [left, right] = [platformLeft(platform), platformRight(platform)];
+      let [low, high] = [Math.min(...tops), Math.max(...tops)];
+      const path = platform.motion?.path;
+      if (path && path.length > 0) {
+        const dx = path.map(({ x }) => x - platform.position.x);
+        const dy = path.map(({ y }) => y - platform.position.y);
+        left += Math.min(...dx);
+        right += Math.max(...dx);
+        low += Math.min(...dy);
+        high += Math.max(...dy);
+      }
+      return platform.kind === "ground"
+        ? { left, right, top: high, bottom: low - platform.height, solid: true }
+        : { left, right, top: high, bottom: low, solid: false };
+    });
   }
 
   private applyLaunch(

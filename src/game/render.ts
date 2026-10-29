@@ -27,6 +27,13 @@ import {
 } from "./stages";
 import { ITEM_DEFINITIONS, ITEM_KINDS, type ItemKind } from "./items";
 import { CombatEffects, type EffectView } from "./effects";
+import {
+  GAME_SPLASH_SECONDS,
+  SLOT_COLORS,
+  finisherFromEvents,
+  finisherWeight,
+  type FinisherCue,
+} from "./finisher";
 import { drawHitboxCircle, drawHurtboxCapsule, drawOriginMarker } from "./debugOverlay";
 import type { ThreeStageRenderer } from "./threeStageRenderer";
 
@@ -483,6 +490,12 @@ export class GameRenderer {
   private flash = 0;
   private flashColor = "#ffffff";
   private goTimer = 0;
+  /** The finishing blow being shown, with real seconds since it started. */
+  private finisher: (FinisherCue & { elapsed: number }) | null = null;
+  /** Real seconds into the GAME! splash; negative while it is not showing. */
+  private gameSplash = -1;
+  private readonly reducedMotion =
+    typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   private readonly effects = new CombatEffects();
   private resizeObserver: ResizeObserver | null = null;
   private lastFrame = -1;
@@ -614,6 +627,8 @@ export class GameRenderer {
     this.shake = 0;
     this.flash = 0;
     this.goTimer = 0;
+    this.finisher = null;
+    this.gameSplash = -1;
     this.effects.reset();
     this.lastFrame = -1;
     this.prepareStage(stage);
@@ -692,8 +707,18 @@ export class GameRenderer {
     await this.nativeStageRenderer?.preload(stage);
   }
 
-  render(snapshot: GameSnapshot, deltaSeconds: number, settings: GameSettings): void {
+  /**
+   * `deltaSeconds` is game time (slowed during a finishing blow);
+   * `realDeltaSeconds` paces presentation that must not slow down with it.
+   */
+  render(
+    snapshot: GameSnapshot,
+    deltaSeconds: number,
+    settings: GameSettings,
+    realDeltaSeconds = deltaSeconds,
+  ): void {
     const dt = clamp(deltaSeconds, 0, 1 / 15);
+    const realDt = clamp(realDeltaSeconds, 0, 1 / 15);
     this.elapsed += dt;
     if (snapshot.frame !== this.lastFrame) {
       const feedback = this.effects.consume(snapshot.events, snapshot);
@@ -701,11 +726,27 @@ export class GameRenderer {
       this.flash = Math.max(this.flash, feedback.flash);
       if (feedback.flash > 0) this.flashColor = feedback.flashColor;
       if (snapshot.events.some(({ type }) => type === "match-start")) this.goTimer = 1;
+      const finisher = finisherFromEvents(snapshot.events, snapshot);
+      if (finisher) {
+        this.finisher = { ...finisher, elapsed: 0 };
+        this.flash = Math.max(this.flash, 0.6);
+        this.flashColor = "#ffffff";
+      }
+      if (snapshot.events.some(({ type }) => type === "match-end")) this.gameSplash = 0;
       this.lastFrame = snapshot.frame;
     }
+    if (this.finisher) {
+      this.finisher.elapsed += realDt;
+      if (this.finisher.elapsed >= this.finisher.timing.seconds) this.finisher = null;
+    }
+    if (this.gameSplash >= 0) this.gameSplash += realDt;
     this.prepareStage(snapshot.stage.id);
     this.updateCamera(snapshot, dt);
     this.effects.update(snapshot, dt);
+    // The punch-in only changes what is drawn this frame; the gameplay camera
+    // keeps smoothing underneath and takes over again as the punch eases out.
+    const gameplayCamera = this.camera;
+    this.camera = this.finisherCamera(snapshot) ?? gameplayCamera;
 
     const shakePower = this.shake * settings.shake;
     const { x: shakeX, y: shakeY } = cameraShakeOffset(this.elapsed, shakePower);
@@ -737,6 +778,7 @@ export class GameRenderer {
     this.drawGo();
     ctx.restore();
     this.effects.drawScreen(ctx, this.effectView());
+    this.drawGameSplash();
 
     if (this.flash > 0.005 && settings.flashes > 0) {
       ctx.save();
@@ -745,6 +787,97 @@ export class GameRenderer {
       ctx.fillRect(0, 0, this.width, this.height);
       ctx.restore();
     }
+    this.camera = gameplayCamera;
+  }
+
+  /** How strongly the finishing blow is presented right now (0 when none is). */
+  private finisherStrength(): number {
+    return this.finisher ? finisherWeight(this.finisher.elapsed, this.finisher.timing.seconds) : 0;
+  }
+
+  /** The gameplay camera pulled toward the launched fighter, or null when there is no punch-in. */
+  private finisherCamera(snapshot: GameSnapshot): typeof this.camera | null {
+    const weight = this.finisherStrength();
+    if (!this.finisher || weight <= 0 || this.reducedMotion) return null;
+    const target = snapshot.fighters[this.finisher.target];
+    const base = this.camera;
+    const zoom = base.zoom * (1 + (this.finisher.timing.zoom - 1) * weight);
+    // Centre the fighter a little above the middle of the screen.
+    const centeredY = target.position.y + (this.height * (CAMERA_SCREEN_ANCHOR_RATIO - 0.48)) / zoom;
+    return {
+      x: base.x + (target.position.x - base.x) * weight,
+      y: base.y + (centeredY - base.y) * weight,
+      zoom,
+    };
+  }
+
+  /** Dims the stage behind the fighters during a finishing blow. */
+  private drawFinisherBackdrop(): void {
+    const weight = this.finisherStrength();
+    if (weight <= 0) return;
+    const ctx = this.context;
+    ctx.save();
+    ctx.globalAlpha = 0.5 * weight;
+    ctx.fillStyle = "#050b1c";
+    ctx.fillRect(-this.width, -this.height, this.width * 3, this.height * 3);
+    ctx.restore();
+  }
+
+  /** Speed lines bursting from the launched fighter, in the attacker's colour. */
+  private drawFinisherLines(snapshot: GameSnapshot): void {
+    const weight = this.finisherStrength();
+    if (!this.finisher || weight <= 0) return;
+    const center = this.worldToScreen(snapshot.fighters[this.finisher.target].position);
+    const color = this.finisher.attacker === undefined ? "#ffffff" : SLOT_COLORS[this.finisher.attacker];
+    const reach = Math.hypot(this.width, this.height);
+    const ctx = this.context;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (let index = 0; index < 28; index += 1) {
+      // Fixed angles and lengths per line, so the burst holds still.
+      const angle = (index / 28) * Math.PI * 2 + Math.sin(index * 12.9898) * 0.09;
+      const inner = 70 + ((index * 37) % 50);
+      const width = 2 + ((index * 7) % 5);
+      ctx.globalAlpha = weight * (index % 3 === 0 ? 0.7 : 0.4);
+      ctx.strokeStyle = index % 3 === 0 ? color : "#ffffff";
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(center.x + Math.cos(angle) * inner, center.y + Math.sin(angle) * inner);
+      ctx.lineTo(center.x + Math.cos(angle) * reach, center.y + Math.sin(angle) * reach);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  private drawGameSplash(): void {
+    if (this.gameSplash < 0 || this.gameSplash > GAME_SPLASH_SECONDS) return;
+    const t = this.gameSplash;
+    // Slams in from large, holds, then fades in the last quarter second.
+    const scale = t < 0.18 ? 2.4 - (t / 0.18) * 1.4 : 1 + Math.max(0, 0.04 - (t - 0.18) * 0.1);
+    const ctx = this.context;
+    ctx.save();
+    ctx.globalAlpha = clamp((GAME_SPLASH_SECONDS - t) / 0.25, 0, 1) * clamp(t / 0.06, 0, 1);
+    ctx.translate(this.width / 2, this.height * 0.42);
+    ctx.scale(scale, scale);
+    ctx.rotate(-0.06);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const size = Math.round(clamp(this.width * 0.15, 96, 220));
+    ctx.font = `italic 950 ${size}px Impact, Haettenschweiler, sans-serif`;
+    ctx.lineJoin = "round";
+    ctx.lineWidth = size * 0.12;
+    ctx.strokeStyle = "#0b1020";
+    ctx.shadowColor = "rgba(255, 70, 40, 0.85)";
+    ctx.shadowBlur = 36;
+    ctx.strokeText("GAME!", 0, 0);
+    ctx.shadowBlur = 0;
+    const fill = ctx.createLinearGradient(0, -size / 2, 0, size / 2);
+    fill.addColorStop(0, "#fff6c2");
+    fill.addColorStop(0.5, "#ffd23a");
+    fill.addColorStop(1, "#ff7a1a");
+    ctx.fillStyle = fill;
+    ctx.fillText("GAME!", 0, 0);
+    ctx.restore();
   }
 
   private readonly resize = (): void => {
@@ -914,6 +1047,7 @@ export class GameRenderer {
 
   private drawWorld(snapshot: GameSnapshot, drawFlattenedStage = true): void {
     if (drawFlattenedStage) this.drawStage(snapshot);
+    this.drawFinisherBackdrop();
     // Over 2D art and 3D scenes alike: these parts are not in the stage art.
     for (const hazard of snapshot.stage.hazards) this.drawHazard(hazard);
     for (const platform of snapshot.stage.platforms) {
@@ -924,6 +1058,7 @@ export class GameRenderer {
     for (const projectile of snapshot.projectiles) this.drawProjectile(projectile);
     for (const fighter of snapshot.fighters) this.drawFighter(fighter);
     this.effects.drawFront(this.context, snapshot, this.effectView());
+    this.drawFinisherLines(snapshot);
     this.drawOffscreenIndicators(snapshot);
   }
 
@@ -1449,7 +1584,6 @@ export class GameRenderer {
   }
 
   private drawOffscreenIndicators(snapshot: GameSnapshot): void {
-    const ctx = this.context;
     snapshot.fighters.forEach((fighter) => {
       if (fighter.respawnFrames > 0) return;
       const screen = this.worldToScreen(fighter.position);
@@ -1466,23 +1600,69 @@ export class GameRenderer {
       if (!offscreen) return;
       const x = clamp(screen.x, margin, this.width - margin);
       const y = clamp(screen.y, margin, this.height - 130);
-      const p = PALETTES[fighter.fighter];
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.fillStyle = p.primary;
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(0, 0, 25, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "900 16px system-ui";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(`P${fighter.slot + 1}`, 0, 1);
-      ctx.restore();
+      this.drawMagnifier(fighter, x, y);
     });
+  }
+
+  /**
+   * Smash's magnifying bubble: the off-screen fighter drawn live inside a
+   * circle at the screen edge, ringed in the player's colour, with a pointer
+   * toward where they really are.
+   */
+  private drawMagnifier(fighter: FighterSnapshot, x: number, y: number): void {
+    const radius = 34;
+    const ctx = this.context;
+    const color = SLOT_COLORS[fighter.slot];
+    const screen = this.worldToScreen(fighter.position);
+    const pointer = Math.atan2(screen.y - y, screen.x - x);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(pointer) * (radius + 12), Math.sin(pointer) * (radius + 12));
+    ctx.lineTo(Math.cos(pointer + 0.5) * radius, Math.sin(pointer + 0.5) * radius);
+    ctx.lineTo(Math.cos(pointer - 0.5) * radius, Math.sin(pointer - 0.5) * radius);
+    ctx.closePath();
+    ctx.fill();
+    const glass = ctx.createRadialGradient(0, -radius * 0.35, 2, 0, 0, radius);
+    glass.addColorStop(0, "rgba(255, 255, 255, 0.5)");
+    glass.addColorStop(1, "rgba(8, 18, 46, 0.88)");
+    ctx.fillStyle = glass;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // The fighter itself, through a camera that puts it in the bubble at a
+    // size that fits.
+    const zoom = Math.min(this.camera.zoom * 0.6, (radius * 1.5) / Math.max(1, fighter.size.height));
+    const gameplayCamera = this.camera;
+    this.camera = {
+      x: fighter.position.x - (x - this.width / 2) / zoom,
+      y: fighter.position.y - (this.height * CAMERA_SCREEN_ANCHOR_RATIO - y) / zoom,
+      zoom,
+    };
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, radius - 2, 0, Math.PI * 2);
+    ctx.clip();
+    this.drawFighter(fighter);
+    ctx.restore();
+    this.camera = gameplayCamera;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.font = "900 11px system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`P${fighter.slot + 1}`, 0, radius + 10);
+    ctx.restore();
   }
 
   private roundedRect(x: number, y: number, width: number, height: number, radius: number): void {
