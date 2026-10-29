@@ -424,8 +424,12 @@ export class GameAudio {
     else if (sound === "swing-light") this.playSample(LOCAL_AUDIO_SAMPLES.dodge, 0.42, "swing-light", 34);
     else if (sound === "swing-heavy") this.playSample(LOCAL_AUDIO_SAMPLES.throw, 0.62, "swing-heavy", 52);
     else if (sound === "special") this.playSample(LOCAL_AUDIO_SAMPLES.projectile, 0.58, "special", 45);
-    else if (sound === "l-cancel") this.playSample(LOCAL_AUDIO_SAMPLES.shield, 0.42, "l-cancel", 35);
     else if (sound === "wavedash") this.playSample(LOCAL_AUDIO_SAMPLES.dodge, 0.52, "wavedash", 45);
+    else if (sound === "parry") {
+      // A bright chime over the shield clang: the parry is the reward cue.
+      this.playSample(LOCAL_AUDIO_SAMPLES.shield, 0.9, "parry-shield", 60);
+      this.playSample(LOCAL_AUDIO_SAMPLES.menuConfirm, 0.85, "parry", 60);
+    }
     else if (sound === "clank") this.playSample(LOCAL_AUDIO_SAMPLES.shield, 0.78, "clank", 55);
   }
 

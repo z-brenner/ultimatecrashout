@@ -154,7 +154,7 @@ export interface AttackDefinition {
   statusFrames?: number;
   requiresFacingTarget?: boolean;
   reversesFacing?: boolean;
-  /** Aerials only: landing lag frames (halved by an L-cancel). Defaults from recovery. */
+  /** Aerials only: landing lag frames. Defaults from recovery. */
   landingLag?: number;
   /**
    * Aerials only: landing before move frame `before`, or on/after frame

@@ -1099,10 +1099,10 @@ export class UIController extends EventTarget {
               <span class="cc-how-card__number">Defend</span>
               <div class="cc-key-combo"><kbd>${escapeHtml(this.keyLabel(p1.shield))}</kbd><span>+</span><kbd>direction</kbd></div>
               <h2>Read your opponent</h2>
-              <p>Shield blocks attacks and grab beats shield. In the air, jump then down-diagonal + shield produces a wavedash; shield just before landing L-cancels an aerial.</p>
+              <p>Shield blocks attacks and grab beats shield. Let go of shield just as a hit lands to parry it and act first; jump straight out of shield to escape. In the air, shield is one air dodge until you land; a diagonal one into the ground wavedashes.</p>
             </article>
           </div>
-          <div class="cc-tip-ribbon"><strong>Advanced movement</strong><span>Quickly reverse left/right to dash-dance. Release jump quickly for a short hop, then press down after the apex to fast-fall. Down also drops through soft platforms.</span></div>
+          <div class="cc-tip-ribbon"><strong>Advanced movement</strong><span>Quickly reverse left/right to dash-dance. Release jump quickly for a short hop, or press jump and attack together for a short-hop aerial (short-hop aerials deal 0.85× damage). Press down after the apex to fast-fall. Down also drops through soft platforms.</span></div>
         </section>`,
       "[data-ui-action='back-home']",
     );

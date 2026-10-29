@@ -513,6 +513,15 @@ export class CombatEffects {
           shake = Math.max(shake, 5);
           break;
         }
+        case "parry":
+          // Ultimate's parry flash: a white burst and a brief freeze-frame glow.
+          this.addTransient("shockwave", position, { x: 1, y: 0 }, 76, "#ffffff", "#fff6c9", "front", 0.32, 4, "heavy");
+          this.addTransient("ring", position, { x: 1, y: 0 }, 58, "#fff6c9", "#ffffff", "front", 0.26, 3, "medium");
+          this.spawnRadial(position, 14, "#ffffff", "star", 0.85, 3);
+          shake = Math.max(shake, 6);
+          flash = Math.max(flash, 0.34);
+          flashColor = "#ffffff";
+          break;
         case "clank":
           this.addTransient("shockwave", position, { x: 1, y: 0 }, 48, "#ffffff", "#fff2b7", "front", 0.2, 3, "medium");
           this.spawnRadial(position, 10, "#ffffff", "spark", 0.7, 3);
@@ -541,10 +550,6 @@ export class CombatEffects {
           const power = clamp(impactSpeed / 720, 0.35, 1.25);
           const groundPosition = groundEffectOrigin(event, snapshot);
           this.spawnGroundDust(groundPosition, 7 + Math.round(power * 7), power, 2);
-          if (event.lCancelled) {
-            this.addTransient("ring", groundPosition, { x: 1, y: 0 }, 44, "#b9fff0", "#ffffff", "front", 0.22, 3, "light");
-            this.spawnRadial(groundPosition, 5, "#eafff9", "star", 0.3, 2);
-          }
           if (event.wavedash) {
             const facing = this.slotFacing(snapshot, event.slot);
             this.spawnDirectional(groundPosition, facing, 14, "#d9efff", "streak", 0.72, 2);
