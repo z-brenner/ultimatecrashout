@@ -83,10 +83,13 @@ platforms.
 
 The camera frames the fighters as Smash does: in close when they are close,
 out as they separate, keeping the ground in view while they are near it. It
-never leaves the stage's camera range, which sits inside the blast zone (80%
-of its sides and bottom, 85% of its top); a fighter beyond it shows in a
-magnifying bubble at the screen edge. Framing is defined for a 720-pixel-tall
-view and scaled, so every window size sees the same part of the stage.
+never leaves the stage's camera range, which sits inside the blast zone (in
+from each side by 10% of its width, from the top by 9% and the bottom by 10%
+of its height; a 3D stage's range also stops at its art, where its model
+ends); a fighter beyond it shows in a magnifying bubble at the screen edge.
+Framing is defined for a 1280×720 view and scaled by the limiting dimension,
+so every window size sees the same part of the stage (wider windows see more
+to the sides, narrower ones more above and below).
 
 ## 2D and 3D rendering
 

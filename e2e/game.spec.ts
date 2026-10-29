@@ -124,11 +124,14 @@ test.describe("local match", () => {
     // Walk in until within jab range (however far apart the stage spawns
     // them), then jab until the hit registers.
     await page.keyboard.down("KeyD");
-    await expect.poll(async () => {
-      const [p1, p2] = (await fighters(page))!;
-      return p2!.x - p1!.x;
-    }, { timeout: 5_000, intervals: [50] }).toBeLessThan(110);
-    await page.keyboard.up("KeyD");
+    try {
+      await expect.poll(async () => {
+        const [p1, p2] = (await fighters(page))!;
+        return p2!.x - p1!.x;
+      }, { timeout: 5_000, intervals: [50] }).toBeLessThan(110);
+    } finally {
+      await page.keyboard.up("KeyD");
+    }
     await expect.poll(async () => {
       await page.keyboard.press("KeyF");
       return (await fighters(page))![1]!.percent;

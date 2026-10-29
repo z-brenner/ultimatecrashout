@@ -17,17 +17,16 @@ import {
   SPRITE_VISUAL_TO_BODY_RATIO,
   cameraShakeOffset,
   cameraSmoothingAmount,
-  clampStageCameraX,
-  clampStageCameraY,
   computeGameplayCameraTarget,
   spritePixelScale,
   fighterArtFootOffset,
   fighterShadowOffset,
   findOpaquePixelBounds,
-  minimumStageArtZoom,
   smoothCameraValue,
   updateGameplayCameraGoal,
+  cameraViewScale,
   clampCameraToBounds,
+  stageArtBounds,
   stageCameraBounds,
 } from "./render";
 import type { GameSnapshot } from "./engine";
@@ -281,9 +280,10 @@ describe("stage art compositing", () => {
     const artCalibration = getStageDefinition(DEFAULT_STAGE_ID).art;
     expect(arenaCall[3]).toBeCloseTo(artCalibration.width * artCalibration.worldUnitsPerPixel * 0.5 + 1);
     expect(arenaCall[4]).toBeCloseTo(artCalibration.height * artCalibration.worldUnitsPerPixel * 0.5);
-    // ...and below it only its bottom row, carried down to the screen edge.
+    // ...and beyond it only its top and bottom rows, carried on to the screen edges.
     const extensions = drawImage.mock.calls.filter((call) => call.length === 9);
-    expect(extensions.every((call) => call[4] === 1 && call[2] === art.naturalHeight - 1)).toBe(true);
+    expect(extensions.length).toBeGreaterThan(0);
+    expect(extensions.every((call) => call[4] === 1 && (call[2] === 0 || call[2] === art.naturalHeight - 1))).toBe(true);
     expect(scale).not.toHaveBeenCalled();
   });
 
@@ -312,7 +312,8 @@ describe("stage art compositing", () => {
 
     const fullDraws = drawImage.mock.calls.filter((call) => call.length === 5);
     expect(fullDraws.filter(([drawn]) => drawn === art)).toHaveLength(1);
-    expect(fullDraws.filter(([drawn]) => drawn === backdrop)).toHaveLength(2);
+    // Only the tile beside the arena: the one under it would be covered anyway.
+    expect(fullDraws.filter(([drawn]) => drawn === backdrop)).toHaveLength(1);
     // The tile right of the arena is mirrored, so its edge meets the arena's.
     expect(scale).toHaveBeenCalledWith(-1, 1);
   });
@@ -346,6 +347,25 @@ describe("stage art compositing", () => {
     if (!backdropCall) throw new Error("The backdrop was not drawn.");
     expect(backdropCall[0]).toBe(backdrop);
     expect(backdropCall.slice(-4)).toEqual([0, 0, 1600, 900]);
+  });
+});
+
+describe("stage background fallback", () => {
+  it("still paints the backdrop when the arena image failed to load", () => {
+    const drawImage = vi.fn();
+    const failedArt = { complete: true, naturalWidth: 0, naturalHeight: 0 } as HTMLImageElement;
+    const backdrop = { complete: true, naturalWidth: 1920, naturalHeight: 1080 } as HTMLImageElement;
+    const harness = {
+      context: { drawImage },
+      stageArt: new Map([[DEFAULT_STAGE_ID, failedArt]]),
+      stageBackdrops: new Map([[DEFAULT_STAGE_ID, backdrop]]),
+      width: 1280,
+      height: 720,
+    };
+    (GameRenderer.prototype as unknown as { drawStageFallback(snapshot: unknown): void })
+      .drawStageFallback.call(harness, { stage: { id: DEFAULT_STAGE_ID } });
+    expect(drawImage).toHaveBeenCalledTimes(1);
+    expect(drawImage.mock.calls[0]![0]).toBe(backdrop);
   });
 });
 
@@ -394,6 +414,28 @@ describe("stage camera bounds", () => {
     }
   });
 
+  it("stay inside any blast zone, even one that does not contain the origin", () => {
+    for (const zone of [
+      { left: -600, right: 2000, top: 900, bottom: -500 },
+      { left: 100, right: 2400, top: 1500, bottom: 50 },
+    ]) {
+      const range = stageCameraBounds(zone);
+      expect(range.left).toBeGreaterThan(zone.left);
+      expect(range.right).toBeLessThan(zone.right);
+      expect(range.top).toBeLessThan(zone.top);
+      expect(range.bottom).toBeGreaterThan(zone.bottom);
+    }
+  });
+
+  it("match the shipped stages' art, which covers the 3D range limit", () => {
+    for (const stage of STAGE_IDS) {
+      const art = stageArtBounds(stage);
+      expect(art.left).toBeLessThan(0);
+      expect(art.right).toBeGreaterThan(0);
+      expect(art.top).toBeGreaterThan(art.bottom);
+    }
+  });
+
   it("leave a camera already inside alone", () => {
     expect(clampCameraToBounds({ x: 20, y: 150, zoom: 1.2 }, bounds, 1280, 720)).toEqual({ x: 20, y: 150, zoom: 1.2 });
   });
@@ -415,56 +457,35 @@ describe("resolution-independent framing", () => {
     expect(held.zoom / height).toBeCloseTo(reference.zoom / 720, 6);
   });
 
+  it("fits both fighters on narrow and portrait windows too", () => {
+    expect(cameraViewScale(720, 1280)).toBeCloseTo(720 / 1280, 9);
+    expect(cameraViewScale(2560, 1080)).toBeCloseTo(1080 / 720, 9);
+    const fighters = [cameraFighter(-299, 41), cameraFighter(299, 41)];
+    for (const [width, height] of [[720, 1280], [800, 800]] as const) {
+      const target = computeGameplayCameraTarget(fighters, width, height);
+      const halfView = width / 2 / target.zoom;
+      expect(target.x - halfView).toBeLessThan(-299 - 31);
+      expect(target.x + halfView).toBeGreaterThan(299 + 31);
+    }
+  });
+
+  it("splits a shortfall it cannot fit, rather than losing one fighter", () => {
+    // A grounded fighter and one launched very high, at the widest zoom.
+    const fighters = [cameraFighter(0, 41), cameraFighter(0, 2600)];
+    const target = computeGameplayCameraTarget(fighters, 1280, 720);
+    const screenY = (worldY: number) => 720 * CAMERA_SCREEN_ANCHOR_RATIO - (worldY - target.y) * target.zoom;
+    const highTop = screenY(2600 + 82 * 0.67);
+    const groundBottom = screenY(41 - 41);
+    // Neither is kept on screen at the other's full expense.
+    expect(highTop).toBeLessThan(0);
+    expect(groundBottom).toBeGreaterThan(720);
+    expect(Math.abs(-highTop - (groundBottom - 720))).toBeLessThan(250);
+  });
+
   it("zooms in on close fighting and out as fighters separate", () => {
     const close = computeGameplayCameraTarget([cameraFighter(-40, 41), cameraFighter(40, 41)], 1280, 720);
     const apart = computeGameplayCameraTarget([cameraFighter(-650, 41), cameraFighter(650, 41)], 1280, 720);
     expect(close.zoom).toBeGreaterThan(apart.zoom * 1.4);
-  });
-});
-
-describe("clampStageCameraX", () => {
-  it("keeps both horizontal arena edges outside a Mac-sized viewport", () => {
-    expect(clampStageCameraX(250, 1600, 1, 1700)).toBe(50);
-    expect(clampStageCameraX(-250, 1600, 1, 1700)).toBe(-50);
-    expect(clampStageCameraX(250, 1600, 1600 / 1700, 1700)).toBe(0);
-  });
-
-  it("reserves overscan for camera shake", () => {
-    expect(clampStageCameraX(250, 1600, 1, 1800, 48)).toBe(52);
-  });
-});
-
-describe("clampStageCameraY", () => {
-  it("keeps the top and bottom of the arena outside a Mac viewport", () => {
-    const zoom = (900 + 96) / 1080;
-    const y = clampStageCameraY(230, 900, zoom, 540, -540, 48);
-    const topScreen = 900 * 0.42 - (540 - y) * zoom;
-    const bottomScreen = 900 * 0.42 - (-540 - y) * zoom;
-    expect(topScreen).toBeLessThanOrEqual(-48);
-    expect(bottomScreen).toBeGreaterThanOrEqual(948);
-  });
-});
-
-describe("minimumStageArtZoom", () => {
-  it("keeps every calibrated HD arena beyond a Mac viewport including shake overscan", () => {
-    const viewport = { width: 1600, height: 900 };
-    const overscan = 48;
-
-    for (const stageId of STAGE_IDS) {
-      const { art } = getStageDefinition(stageId);
-      const worldWidth = art.width * art.worldUnitsPerPixel;
-      const worldHeight = art.height * art.worldUnitsPerPixel;
-      const zoom = minimumStageArtZoom(
-        viewport.width,
-        viewport.height,
-        worldWidth,
-        worldHeight,
-        overscan,
-      );
-
-      expect(worldWidth * zoom).toBeGreaterThanOrEqual(viewport.width + overscan * 2);
-      expect(worldHeight * zoom).toBeGreaterThanOrEqual(viewport.height + overscan * 2);
-    }
   });
 });
 

@@ -286,6 +286,19 @@ describe("complete local UI flow", () => {
     ui.destroy();
   });
 
+  it("starts from the title even if Enter lands before Start has focus", () => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    const ui = new UIController(root);
+    click(root, "[data-ui-action='boot-skip']");
+    expect(ui.screen).toBe("title");
+    // Focus moves to Start a frame later; until then key presses hit <body>.
+    (document.activeElement as HTMLElement | null)?.blur();
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { code: "Enter", key: "Enter", bubbles: true }));
+    expect(ui.screen).toBe("home");
+    ui.destroy();
+  });
+
   it("shows Smash-style damage, stock icons, and a jolt on each hit", () => {
     const root = document.createElement("div");
     document.body.append(root);
