@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { InputFrame } from "./contracts";
 import { createEmptyInput, createGame, type GameEvent, type GameSnapshot } from "./engine";
-import { FINAL_FINISHER, FINISHER, finisherFromEvents, finisherWeight } from "./finisher";
+import { readFileSync } from "node:fs";
+import {
+  FINAL_FINISHER,
+  FINISHER,
+  SLOT_COLORS,
+  finisherFromEvents,
+  finisherWeight,
+  transparentColor,
+  updateFinisher,
+} from "./finisher";
 import { GameRenderer } from "./render";
 
 const snapshotWithStocks = (stocks: [number, number]) =>
@@ -36,6 +45,46 @@ describe("finishing blow timing", () => {
       .toMatchObject({ final: true, timing: FINAL_FINISHER });
     expect(FINAL_FINISHER.seconds).toBeGreaterThan(FINISHER.seconds);
     expect(FINAL_FINISHER.timeScale).toBeLessThan(FINISHER.timeScale);
+  });
+});
+
+describe("finishing blow state", () => {
+  const ko = (slot: 0 | 1): GameEvent => ({ type: "ko", frame: 12, slot });
+  const snapshot = snapshotWithStocks([3, 3]);
+
+  it("starts on a predicted KO, runs on real time, and ends when its time is up", () => {
+    let state = updateFinisher(null, [launch(true)], snapshot, 0.1);
+    expect(state).toMatchObject({ target: 1, elapsed: 0.1 });
+    state = updateFinisher(state, [], snapshot, 0.1);
+    expect(state!.elapsed).toBeCloseTo(0.2, 9);
+    for (let frame = 0; frame < 10 && state; frame += 1) state = updateFinisher(state, [], snapshot, 0.1);
+    expect(state).toBeNull();
+  });
+
+  it("eases out once its fighter is KO'd, but not for the other fighter's KO", () => {
+    const started = updateFinisher(null, [launch(true)], snapshot, 0.05)!;
+    expect(updateFinisher(started, [ko(0)], snapshot, 0)!.elapsed).toBeCloseTo(0.05, 9);
+    const afterKo = updateFinisher(started, [ko(1)], snapshot, 0)!;
+    expect(afterKo.elapsed).toBeCloseTo(FINISHER.seconds * 0.6, 9);
+    // From there it only fades.
+    const later = updateFinisher(afterKo, [], snapshot, 0.05)!;
+    expect(finisherWeight(later.elapsed, FINISHER.seconds)).toBeLessThan(1);
+  });
+
+  it("does nothing without a predicted KO", () => {
+    expect(updateFinisher(null, [launch(false), ko(1)], snapshot, 0.1)).toBeNull();
+  });
+});
+
+describe("player colours", () => {
+  it("match the HUD's colour tokens and fade without going through black", () => {
+    const css = readFileSync("src/styles.css", "utf8");
+    // The last definition wins (the identity layer at the end of the file).
+    const token = (name: string) => [...css.matchAll(new RegExp(`--cc-${name}:\\s*(#[0-9a-fA-F]{6})`, "g"))].at(-1)?.[1];
+    expect(SLOT_COLORS[0].toLowerCase()).toBe(token("blue")?.toLowerCase());
+    expect(SLOT_COLORS[1].toLowerCase()).toBe(token("coral")?.toLowerCase());
+    expect(transparentColor("#ff7657")).toBe("#ff765700");
+    expect(transparentColor("rgb(1, 2, 3)")).toBe("rgba(0, 0, 0, 0)");
   });
 });
 
@@ -79,7 +128,7 @@ describe("launch events", () => {
     applyLaunch(target: Runtime, attacker: Runtime, damage: number, angle: number,
       baseKnockback: number, growth: number, hitstun: number, input: InputFrame): void;
   };
-  const launched = (percent: number) => {
+  const launched = (percent: number, hitstop = 3) => {
     const game = createGame({
       players: [
         { fighter: "george", skin: "00", name: "P1", slot: 0, cpu: false, cpuLevel: 1 },
@@ -92,7 +141,7 @@ describe("launch events", () => {
     for (let frame = 0; frame < 20; frame += 1) game.step([createEmptyInput(), createEmptyInput()]);
     target.percent = percent;
     internals.applyLaunch(target, attacker, 18, 45, 40, 1, 0, createEmptyInput());
-    target.hitstopFrames = 3;
+    target.hitstopFrames = hitstop;
     const events: GameEvent[] = [];
     for (let frame = 0; frame < 300; frame += 1) {
       events.push(...game.step([createEmptyInput(), createEmptyInput()]).events);
@@ -110,5 +159,11 @@ describe("launch events", () => {
     expect(deadlyLaunch).toMatchObject({ target: 1, predictedKo: true });
     // The KO it predicted follows.
     expect(deadly.some(({ type, slot, frame }) => type === "ko" && slot === 1 && frame > deadlyLaunch.frame)).toBe(true);
+  });
+
+  it("announces launches with no hitlag too (throws, items, hazards)", () => {
+    const events = launched(220, 0).filter(({ type }) => type === "launch");
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ target: 1, predictedKo: true });
   });
 });

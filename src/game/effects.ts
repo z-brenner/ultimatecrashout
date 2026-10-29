@@ -16,7 +16,7 @@ import {
   type ProjectileDefinition,
   type Vec2,
 } from "./roster";
-import { SLOT_COLORS } from "./finisher";
+import { SLOT_COLORS, transparentColor } from "./finisher";
 import { OPEN_FIGHTER_PACKS } from "./generated/openFighterRegistry";
 
 export const MAX_EFFECT_PARTICLES = 384;
@@ -1076,7 +1076,7 @@ export class CombatEffects {
       const column = ctx.createLinearGradient(0, 0, -length, 0);
       column.addColorStop(0, effect.color);
       column.addColorStop(0.5, effect.color);
-      column.addColorStop(1, `${effect.color}00`);
+      column.addColorStop(1, transparentColor(effect.color));
       ctx.fillStyle = column;
       ctx.beginPath();
       ctx.moveTo(size * 0.2, -size * 0.35);

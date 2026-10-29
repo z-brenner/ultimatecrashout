@@ -8,8 +8,15 @@ import type { GameEvent, GameSnapshot } from "./engine";
  * a GAME! splash.
  */
 
-/** Player colours: P1 blue, P2 coral, as in the HUD. */
+/**
+ * Player colours on the canvas: P1 blue, P2 coral. Keep in step with the
+ * HUD's --cc-blue and --cc-coral (src/styles.css); always #rrggbb.
+ */
 export const SLOT_COLORS: Readonly<Record<PlayerSlot, string>> = { 0: "#2878ff", 1: "#ff7657" };
+
+/** A #rrggbb colour at zero alpha, for gradients that fade it out (any other form fades through black). */
+export const transparentColor = (color: string): string =>
+  /^#[0-9a-f]{6}$/i.test(color) ? `${color}00` : "rgba(0, 0, 0, 0)";
 
 export interface FinisherTiming {
   /** Real seconds the slow-down and camera punch last. */
@@ -53,4 +60,31 @@ export const finisherWeight = (elapsed: number, seconds: number): number => {
   if (progress < 0.6) return 1;
   const out = (progress - 0.6) / 0.4;
   return 1 - out * out * (3 - 2 * out);
+};
+
+/** A finishing blow being shown: its cue and real seconds since it started. */
+export type FinisherState = FinisherCue & { elapsed: number };
+
+/**
+ * Advances the finishing blow on screen by one rendered frame: starts one on
+ * a predicted-KO launch, jumps to the ease-out once its fighter is KO'd
+ * (nothing is left to punch in on), and ends it when its time is up.
+ * `events` are this frame's new simulation events (empty on a repeat frame).
+ */
+export const updateFinisher = (
+  state: FinisherState | null,
+  events: readonly GameEvent[],
+  snapshot: GameSnapshot,
+  realSeconds: number,
+): FinisherState | null => {
+  const cue = finisherFromEvents(events, snapshot);
+  let next: FinisherState | null = cue ? { ...cue, elapsed: 0 } : state && { ...state };
+  if (next && events.some(({ type, slot }) => type === "ko" && slot === next!.target)) {
+    next.elapsed = Math.max(next.elapsed, next.timing.seconds * 0.6);
+  }
+  if (next) {
+    next.elapsed += realSeconds;
+    if (next.elapsed >= next.timing.seconds) next = null;
+  }
+  return next;
 };

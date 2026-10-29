@@ -692,6 +692,8 @@ interface FighterRuntime {
   hitstopElapsedFrames: number;
   hitstunFrames: number;
   launchBaseAngle: number | null;
+  /** A launch not yet announced with a "launch" event. */
+  launchAnnouncePending: boolean;
   pendingHitstopDi: Vec2 | null;
   sdiRegion: number | null;
   asdiDirection: Vec2 | null;
@@ -758,6 +760,11 @@ export const jumpSpeedForMinimumRise = (
   authoredSpeed,
   Math.sqrt(2 * gravity * minimumRise) + gravity * FIXED_DT * 0.5,
 );
+
+/** Share of air acceleration a fighter can drift with during hitstun. */
+export const HITSTUN_DRIFT_ACCELERATION_RATIO = 0.32;
+/** Half the width of the foot box that lands on platforms, as a share of body width. */
+export const LANDING_FOOT_HALF_WIDTH_RATIO = 0.26;
 
 /** Melee converts knockback units to launch speed in character-units per frame. */
 export const MELEE_LAUNCH_SPEED_MULTIPLIER = 0.03;
@@ -854,30 +861,34 @@ export interface LaunchKoProbe {
   size: { width: number; height: number };
   blastZone: { left: number; right: number; top: number; bottom: number };
   surfaces: readonly LaunchSurface[];
+  /** Breaks ties for the worst-case drift when the fighter has no horizontal motion. */
+  stageCenterX: number;
 }
 
 /**
  * Whether a launch KOs for sure: the fighter crosses a blast line before
- * hitstun ends, even drifting toward the stage the whole way, without
+ * hitstun ends, even drifting against its horizontal flight the whole way, without
  * meeting any surface it could land on, tech, or bounce off. It mirrors the
  * engine's hitstun movement and errs toward "no", so presentation can trust
  * a "yes" (a later hit or hazard during the flight is the only exception).
  */
 export const predictLaunchKo = (probe: LaunchKoProbe): boolean => {
-  const { blastZone, size, surfaces } = probe;
-  const stageCenter = (blastZone.left + blastZone.right) / 2;
+  const { blastZone, size, surfaces, stageCenterX } = probe;
   const halfHeight = size.height / 2;
   // The engine lands on tops with a narrow foot box; walls use the full body.
-  const footHalfWidth = size.width * 0.26;
+  const footHalfWidth = size.width * LANDING_FOOT_HALF_WIDTH_RATIO;
   const bodyHalfWidth = size.width / 2;
   const position = { ...probe.position };
   const velocity = { ...probe.velocity };
   let launch = { ...probe.launchVelocity };
   for (let frame = 0; frame < probe.hitstunFrames; frame += 1) {
-    // Hitstun drift (input during hitstun), always toward the stage.
-    velocity.x -= Math.sign(position.x - stageCenter) * probe.airAcceleration * FIXED_DT * 0.32;
-    velocity.y = Math.max(velocity.y - probe.gravity * FIXED_DT, -probe.maxFallSpeed);
     const world = meleeLaunchVelocityToWorld(launch);
+    // Hitstun drift (input during hitstun), always against the horizontal
+    // flight: the most a player can do to stay inside the side blast lines.
+    const flight = velocity.x + world.x;
+    const away = Math.abs(flight) > 1 ? Math.sign(flight) : Math.sign(position.x - stageCenterX);
+    velocity.x -= away * probe.airAcceleration * FIXED_DT * HITSTUN_DRIFT_ACCELERATION_RATIO;
+    velocity.y = Math.max(velocity.y - probe.gravity * FIXED_DT, -probe.maxFallSpeed);
     const previousBottom = position.y - halfHeight;
     position.x += (velocity.x + world.x) * FIXED_DT;
     position.y += (velocity.y + world.y) * FIXED_DT;
@@ -1520,6 +1531,7 @@ export class CombatGame {
       hitstopElapsedFrames: 0,
       hitstunFrames: 0,
       launchBaseAngle: null,
+      launchAnnouncePending: false,
       pendingHitstopDi: null,
       sdiRegion: null,
       asdiDirection: null,
@@ -1772,6 +1784,8 @@ export class CombatGame {
     }
 
     if (fighter.hitstunFrames > 0) {
+      // Launches without hitlag (throws, items, hazards) are announced as they start.
+      this.announceLaunch(fighter);
       fighter.launchBaseAngle = null;
       fighter.pendingHitstopDi = null;
       const mashEscape = fighter.statusEffect
@@ -1795,7 +1809,7 @@ export class CombatGame {
           fighter.definition.traction * GROUND_HITSTUN_BRAKE_MULTIPLIER * FIXED_DT,
         );
       } else {
-        fighter.velocity.x += direction.x * fighter.definition.airAcceleration * FIXED_DT * 0.32;
+        fighter.velocity.x += direction.x * fighter.definition.airAcceleration * FIXED_DT * HITSTUN_DRIFT_ACCELERATION_RATIO;
       }
       this.integrateFighter(fighter, input);
       if (fighter.hitstunFrames === 0) {
@@ -2834,9 +2848,9 @@ export class CombatGame {
         const previousTop = this.previousPlatformTop(platform, fighter.previousPosition.x);
         const top = platformTop(platform, fighter.position.x);
         const withinHorizontal =
-          fighter.position.x + fighter.definition.size.width * 0.26 >=
+          fighter.position.x + fighter.definition.size.width * LANDING_FOOT_HALF_WIDTH_RATIO >=
             platform.position.x - platform.width / 2 &&
-          fighter.position.x - fighter.definition.size.width * 0.26 <=
+          fighter.position.x - fighter.definition.size.width * LANDING_FOOT_HALF_WIDTH_RATIO <=
             platform.position.x + platform.width / 2;
         if (
           withinHorizontal &&
@@ -4079,8 +4093,8 @@ export class CombatGame {
       const previousTop = platformTop(platform, fighter.previousPosition.x);
       const top = platformTop(platform, fighter.position.x);
       const overlaps =
-        fighter.position.x + fighter.definition.size.width * 0.26 >= platformLeft(platform) &&
-        fighter.position.x - fighter.definition.size.width * 0.26 <= platformRight(platform);
+        fighter.position.x + fighter.definition.size.width * LANDING_FOOT_HALF_WIDTH_RATIO >= platformLeft(platform) &&
+        fighter.position.x - fighter.definition.size.width * LANDING_FOOT_HALF_WIDTH_RATIO <= platformRight(platform);
       if (
         overlaps &&
         previousBottom >= previousTop - 0.01 &&
@@ -4123,6 +4137,14 @@ export class CombatGame {
     fighter.sdiRegion = null;
     fighter.asdiDirection = null;
     // DI and SDI are final: the flight is now known.
+    this.announceLaunch(fighter);
+  }
+
+  /** Emits the "launch" event for a fresh launch, once, with whether it is a certain KO. */
+  private announceLaunch(fighter: FighterRuntime): void {
+    if (!fighter.launchAnnouncePending) return;
+    fighter.launchAnnouncePending = false;
+    const { surfaces, stageCenterX } = this.launchGeometry();
     this.emit({
       type: "launch",
       slot: fighter.lastHitBy ?? undefined,
@@ -4139,14 +4161,21 @@ export class CombatGame {
         airAcceleration: fighter.definition.airAcceleration,
         size: fighter.definition.size,
         blastZone: this.stage.blastZone,
-        surfaces: this.launchSurfaces(),
+        surfaces,
+        stageCenterX,
       }),
     });
   }
 
-  /** Every platform as the KO predictor sees it, moving ones over their whole path. */
-  private launchSurfaces(): LaunchSurface[] {
-    return this.stage.platforms.map((platform) => {
+  private launchGeometryCache: { surfaces: LaunchSurface[]; stageCenterX: number } | null = null;
+
+  /**
+   * Every platform as the KO predictor sees it (moving ones over their whole
+   * path, so it depends only on the stage), and the centre of the solid stage.
+   */
+  private launchGeometry(): { surfaces: LaunchSurface[]; stageCenterX: number } {
+    if (this.launchGeometryCache) return this.launchGeometryCache;
+    const surfaces = this.stage.platforms.map((platform): LaunchSurface => {
       const tops = [platformTop(platform, platformLeft(platform)), platformTop(platform, platformRight(platform))];
       let [left, right] = [platformLeft(platform), platformRight(platform)];
       let [low, high] = [Math.min(...tops), Math.max(...tops)];
@@ -4163,6 +4192,12 @@ export class CombatGame {
         ? { left, right, top: high, bottom: low - platform.height, solid: true }
         : { left, right, top: high, bottom: low, solid: false };
     });
+    const solid = surfaces.filter(({ solid: isSolid }) => isSolid);
+    const stageCenterX = solid.length > 0
+      ? (Math.min(...solid.map(({ left }) => left)) + Math.max(...solid.map(({ right }) => right))) / 2
+      : (this.stage.blastZone.left + this.stage.blastZone.right) / 2;
+    this.launchGeometryCache = { surfaces, stageCenterX };
+    return this.launchGeometryCache;
   }
 
   private applyLaunch(
@@ -4209,6 +4244,7 @@ export class CombatGame {
     const angle = this.directionalInfluenceAngle(angleDegrees, di);
     target.velocity = { x: 0, y: 0 };
     target.launchVelocity = meleeLaunchVelocity(knockback, angle);
+    target.launchAnnouncePending = true;
     target.grounded = false;
     target.supportPlatform = null;
     target.fastFalling = false;

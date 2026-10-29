@@ -32,7 +32,8 @@ import {
   SLOT_COLORS,
   finisherFromEvents,
   finisherWeight,
-  type FinisherCue,
+  updateFinisher,
+  type FinisherState,
 } from "./finisher";
 import { drawHitboxCircle, drawHurtboxCapsule, drawOriginMarker } from "./debugOverlay";
 import type { ThreeStageRenderer } from "./threeStageRenderer";
@@ -491,11 +492,13 @@ export class GameRenderer {
   private flashColor = "#ffffff";
   private goTimer = 0;
   /** The finishing blow being shown, with real seconds since it started. */
-  private finisher: (FinisherCue & { elapsed: number }) | null = null;
+  private finisher: FinisherState | null = null;
   /** Real seconds into the GAME! splash; negative while it is not showing. */
   private gameSplash = -1;
-  private readonly reducedMotion =
-    typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  /** Read live, so turning the OS setting on mid-session takes effect. */
+  private get reducedMotion(): boolean {
+    return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
   private readonly effects = new CombatEffects();
   private resizeObserver: ResizeObserver | null = null;
   private lastFrame = -1;
@@ -718,7 +721,9 @@ export class GameRenderer {
     realDeltaSeconds = deltaSeconds,
   ): void {
     const dt = clamp(deltaSeconds, 0, 1 / 15);
-    const realDt = clamp(realDeltaSeconds, 0, 1 / 15);
+    // Same cap as the game loop's frame time, so the punch-in, its slow
+    // motion, and the GAME! splash before the results all keep one clock.
+    const realDt = clamp(realDeltaSeconds, 0, 0.1);
     this.elapsed += dt;
     if (snapshot.frame !== this.lastFrame) {
       const feedback = this.effects.consume(snapshot.events, snapshot);
@@ -726,19 +731,15 @@ export class GameRenderer {
       this.flash = Math.max(this.flash, feedback.flash);
       if (feedback.flash > 0) this.flashColor = feedback.flashColor;
       if (snapshot.events.some(({ type }) => type === "match-start")) this.goTimer = 1;
-      const finisher = finisherFromEvents(snapshot.events, snapshot);
-      if (finisher) {
-        this.finisher = { ...finisher, elapsed: 0 };
+      if (finisherFromEvents(snapshot.events, snapshot) && !this.reducedMotion) {
         this.flash = Math.max(this.flash, 0.6);
         this.flashColor = "#ffffff";
       }
       if (snapshot.events.some(({ type }) => type === "match-end")) this.gameSplash = 0;
-      this.lastFrame = snapshot.frame;
     }
-    if (this.finisher) {
-      this.finisher.elapsed += realDt;
-      if (this.finisher.elapsed >= this.finisher.timing.seconds) this.finisher = null;
-    }
+    const newEvents = snapshot.frame !== this.lastFrame ? snapshot.events : [];
+    this.finisher = updateFinisher(this.finisher, newEvents, snapshot, realDt);
+    this.lastFrame = snapshot.frame;
     if (this.gameSplash >= 0) this.gameSplash += realDt;
     this.prepareStage(snapshot.stage.id);
     this.updateCamera(snapshot, dt);
@@ -826,8 +827,10 @@ export class GameRenderer {
   /** Speed lines bursting from the launched fighter, in the attacker's colour. */
   private drawFinisherLines(snapshot: GameSnapshot): void {
     const weight = this.finisherStrength();
-    if (!this.finisher || weight <= 0) return;
-    const center = this.worldToScreen(snapshot.fighters[this.finisher.target].position);
+    if (!this.finisher || weight <= 0 || this.reducedMotion) return;
+    const target = snapshot.fighters[this.finisher.target];
+    if (target.state === "ko" || target.respawnFrames > 0) return;
+    const center = this.worldToScreen(target.position);
     const color = this.finisher.attacker === undefined ? "#ffffff" : SLOT_COLORS[this.finisher.attacker];
     const reach = Math.hypot(this.width, this.height);
     const ctx = this.context;
@@ -1047,12 +1050,12 @@ export class GameRenderer {
 
   private drawWorld(snapshot: GameSnapshot, drawFlattenedStage = true): void {
     if (drawFlattenedStage) this.drawStage(snapshot);
-    this.drawFinisherBackdrop();
     // Over 2D art and 3D scenes alike: these parts are not in the stage art.
     for (const hazard of snapshot.stage.hazards) this.drawHazard(hazard);
     for (const platform of snapshot.stage.platforms) {
       if (platform.motion) this.drawMovingPlatform(snapshot.stage.id, platform);
     }
+    this.drawFinisherBackdrop();
     this.effects.drawBehind(this.context, snapshot, this.effectView());
     for (const item of snapshot.items) this.drawItem(item);
     for (const projectile of snapshot.projectiles) this.drawProjectile(projectile);

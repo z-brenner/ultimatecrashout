@@ -29,17 +29,24 @@ const rng = (seed: number) => () => {
   return (seed >>> 8) / 0x1000000;
 };
 
-const toward = (x: number): InputFrame => {
-  const direction = { x: x > 0 ? -1 : 1, y: 0 };
+/** Holds left (-1) or right (+1). */
+const hold = (side: number): InputFrame => {
+  const direction = { x: side < 0 ? -1 : 1, y: 0 };
   return { ...createEmptyInput(), held: new Set([direction.x < 0 ? "left" : "right"]), direction };
 };
+
+type Drift = "none" | "toward-stage" | "against-flight";
 
 const FIGHTERS: FighterId[] = ["kaykit-knight", "george", "buckle", "yeti", "rgs-stick"];
 
 interface Trial { predicted: boolean; ko: boolean; koInHitstun: boolean }
 
-/** Launches one fighter with random knockback and returns what was predicted and what happened. */
-const trial = (random: () => number, stage: StageId, drift: boolean): Trial => {
+/**
+ * Launches one fighter with random knockback and returns what was predicted
+ * and what happened. `blastLeft` stretches the left blast line, for a stage
+ * whose blast zone is not centred on it.
+ */
+const trial = (random: () => number, stage: StageId, drift: Drift, blastLeft?: number): Trial => {
   const fighter = FIGHTERS[Math.floor(random() * FIGHTERS.length)]!;
   const config: MatchConfig = {
     players: [
@@ -53,6 +60,7 @@ const trial = (random: () => number, stage: StageId, drift: boolean): Trial => {
     spawnPositions: [{ x: 0, y: 60 }, { x: -500 + random() * 1000, y: 80 + random() * 400 }],
   });
   const internals = game as unknown as Internals;
+  if (blastLeft !== undefined) (game as unknown as { stage: { blastZone: { left: number } } }).stage.blastZone.left = blastLeft;
   const [attacker, target] = internals.fighters;
   for (let frame = 0; frame < 3; frame += 1) game.step([createEmptyInput(), createEmptyInput()]);
   target.percent = random() * 220;
@@ -65,7 +73,10 @@ const trial = (random: () => number, stage: StageId, drift: boolean): Trial => {
   let hitstunAtLaunch = 0;
   let framesSinceLaunch = 0;
   for (let frame = 0; frame < 420; frame += 1) {
-    const targetInput = drift ? toward(target.position.x) : createEmptyInput();
+    const flight = target.velocity.x;
+    const targetInput = drift === "none"
+      ? createEmptyInput()
+      : drift === "toward-stage" ? hold(-target.position.x) : hold(-flight || -target.position.x);
     const snapshot = game.step([createEmptyInput(), targetInput]);
     if (launch) framesSinceLaunch += 1;
     for (const event of snapshot.events) {
@@ -85,7 +96,8 @@ describe("launch KO prediction", () => {
   it.each(STAGE_IDS.map((stage) => [stage]))("never predicts a KO that does not happen (%s)", (stage) => {
     const random = rng(0xc0ffee ^ stage.length);
     const trials: Trial[] = [];
-    for (let index = 0; index < 160; index += 1) trials.push(trial(random, stage, index % 2 === 1));
+    const drifts: Drift[] = ["none", "toward-stage", "against-flight"];
+    for (let index = 0; index < 180; index += 1) trials.push(trial(random, stage, drifts[index % 3]!));
     const falsePositives = trials.filter(({ predicted, ko }) => predicted && !ko);
     expect(falsePositives).toEqual([]);
     // It is conservative, not useless: it calls most KOs that happen during hitstun.
@@ -93,6 +105,47 @@ describe("launch KO prediction", () => {
     const called = hitstunKos.filter(({ predicted }) => predicted);
     expect(hitstunKos.length).toBeGreaterThan(20);
     expect(called.length / hitstunKos.length).toBeGreaterThan(0.85);
+  });
+
+  it("stays right on a stage whose blast zone is not centred on it", () => {
+    const random = rng(0xa5a5);
+    const trials: Trial[] = [];
+    for (let index = 0; index < 120; index += 1) {
+      trials.push(trial(random, "verdant-grove" as StageId, index % 2 ? "against-flight" : "toward-stage", -2400));
+    }
+    expect(trials.filter(({ predicted, ko }) => predicted && !ko)).toEqual([]);
+    expect(trials.some(({ predicted }) => predicted)).toBe(true);
+  });
+
+  it("only calls a KO the same launch would also make with no drift at all", () => {
+    // Drift is the player's only say during hitstun; the worst case must never
+    // help the launch along, wherever the fighter is relative to the stage.
+    const blastZone = { left: -1600, right: 1000, top: 1200, bottom: -900 };
+    let called = 0;
+    for (let x = -1400; x <= 800; x += 100) {
+      for (const angle of [0, 15, 30, 150, 165, 180]) {
+        for (let speed = 2; speed <= 12; speed += 0.25) {
+          const radians = (angle * Math.PI) / 180;
+          const probe = {
+            position: { x, y: 300 },
+            velocity: { x: 0, y: 0 },
+            launchVelocity: { x: Math.cos(radians) * speed, y: Math.sin(radians) * speed },
+            hitstunFrames: Math.floor(speed * 9),
+            gravity: 2000,
+            maxFallSpeed: 900,
+            airAcceleration: 2400,
+            size: { width: 60, height: 100 },
+            blastZone,
+            surfaces: [],
+            stageCenterX: 0,
+          };
+          if (!predictLaunchKo(probe)) continue;
+          called += 1;
+          expect(predictLaunchKo({ ...probe, airAcceleration: 0 })).toBe(true);
+        }
+      }
+    }
+    expect(called).toBeGreaterThan(100);
   });
 
   it("stops at the first surface in the way", () => {
@@ -105,6 +158,7 @@ describe("launch KO prediction", () => {
       airAcceleration: 1200,
       size: { width: 60, height: 100 },
       blastZone: { left: -1000, right: 1000, top: 900, bottom: -600 },
+      stageCenterX: 0,
     };
     // Straight up, hard: a KO through the top...
     const up = { ...base, launchVelocity: { x: 0, y: 9 }, surfaces: [] };
