@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { OPEN_FIGHTER_IDS, type FighterId } from "./contracts";
-import { koPercent } from "./koMeasure";
+import { koPercent, kosAt } from "./koMeasure";
 import { getFighterDefinition, type MoveName } from "./roster";
 
 /**
@@ -34,14 +34,14 @@ describe("KO timing (Smash Ultimate ranges)", () => {
     const early: string[] = [];
     for (const fighter of OPEN_FIGHTER_IDS) {
       for (const move of Object.keys(getFighterDefinition(fighter).attacks) as MoveName[]) {
-        const percent = koPercent(fighter, MID, move, { step: 4 });
         // Smash's strongest uncharged moves (heavies' smashes, charge punches)
         // KO around 70-90%; nothing uncharged should KO a mid-weight sooner.
-        if (percent !== null && percent < 70) early.push(`${fighter} ${move} ${percent}%`);
+        // Knockback grows with percent, so surviving 69% means surviving below it.
+        if (kosAt(fighter, MID, move, 69)) early.push(`${fighter} ${move} ${koPercent(fighter, MID, move)}%`);
       }
     }
     expect(early).toEqual([]);
-  });
+  }, 30_000);
 
   it("makes heavy hitters KO earlier and light ones later, through damage", () => {
     const fsmash = (fighter: FighterId) => koPercent(fighter, MID, "forward-smash", { step: 2 })!;

@@ -116,6 +116,15 @@ const lowestKoPercent = (
   return high;
 };
 
+/** Whether the move, at its strongest, KOs the target from `percent`. */
+export const kosAt = (
+  attacker: FighterId,
+  target: FighterId,
+  move: MoveName,
+  percent: number,
+  { stage = "verdant-grove" as StageId, charge = 0 } = {},
+): boolean => launchingHits(attacker, move, charge).some((hit) => kos(attacker, target, move, hit, percent, stage));
+
 export const koPercent = (
   attacker: FighterId,
   target: FighterId,
