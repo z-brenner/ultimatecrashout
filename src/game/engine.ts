@@ -200,11 +200,11 @@ export const meleeHitScaling = (
 };
 
 const cloneMatchResult = (result: MatchResult): MatchResult => {
-  const pair = (value?: [number, number]): [number, number] | undefined => value && [value[0], value[1]];
+  const pair = (value: [number, number]): [number, number] => [value[0], value[1]];
   return {
     winner: result.winner,
     durationMs: result.durationMs,
-    kos: [result.kos[0], result.kos[1]],
+    kos: pair(result.kos),
     falls: pair(result.falls),
     selfDestructs: pair(result.selfDestructs),
     damageDealt: pair(result.damageDealt),

@@ -222,6 +222,11 @@ const startMatch = async (
   if (context.signal.aborted) {
     throw context.signal.reason ?? new DOMException("Aborted", "AbortError");
   }
+  // The fight starts only once the versus splash has had its moment.
+  await context.waitForSplash?.();
+  if (context.signal.aborted) {
+    throw context.signal.reason ?? new DOMException("Aborted", "AbortError");
+  }
   activateMatch(config, activeRenderer);
 };
 

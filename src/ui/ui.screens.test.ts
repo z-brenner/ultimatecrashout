@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OPEN_FIGHTER_IDS } from "../game/contracts";
 import { getFighterDefinition } from "../game/roster";
 import { DEFAULT_STAGE_ID, getStageDefinition } from "../game/stages";
-import { UIController } from "./ui";
+import { UIController, type MatchLaunchContext } from "./ui";
 
 const OPEN_P1 = OPEN_FIGHTER_IDS[0];
 const OPEN_P2 = OPEN_FIGHTER_IDS[1];
@@ -57,8 +57,9 @@ describe("Smash-style menus and screens", () => {
     expect(banner?.textContent).toMatch(/Ready to fight/i);
     expect(banner?.classList.contains("is-entering")).toBe(true);
     expect(document.activeElement).toBe(banner);
-    // One way forward at a time, so a click or a test never finds two.
-    expect(root.querySelectorAll("[data-ui-action='open-stage-select']")).toHaveLength(1);
+    // The banner is the one focusable way forward; the Stages card is a mouse-only twin.
+    const forward = [...root.querySelectorAll<HTMLElement>("[data-ui-action='open-stage-select']")];
+    expect(forward.filter((element) => element.tabIndex !== -1)).toEqual([banner]);
     expect(onUiSound.mock.calls.filter(([cue]) => cue === "ready-to-fight")).toHaveLength(1);
 
     // Another redraw while ready keeps the banner without replaying its entrance.
@@ -76,29 +77,69 @@ describe("Smash-style menus and screens", () => {
     ui.destroy();
   });
 
-  it("shows both fighters on a versus splash and holds it briefly after a fast load", async () => {
-    const root = document.createElement("div");
-    document.body.append(root);
-    let resolveLaunch: (() => void) | undefined;
-    const onStartMatch = vi.fn(() => new Promise<void>((resolve) => { resolveLaunch = resolve; }));
-    const ui = new UIController(root, { onStartMatch }, { initialFighters: [OPEN_P1, OPEN_P2], versusSplashMs: 1_000 });
+  const toVersusSplash = (root: HTMLElement): void => {
     toCharacterSelect(root);
     click(root, "[data-ui-action='toggle-player-ready'][data-player-slot='0']");
     click(root, "[data-ui-action='toggle-player-ready'][data-player-slot='1']");
-    click(root, "[data-ui-action='open-stage-select']");
+    click(root, ".cc-ready-banner");
     click(root, `[data-ui-action='select-stage'][data-stage='${DEFAULT_STAGE_ID}']`);
     click(root, "[data-ui-action='stage-confirm']");
+  };
+
+  /** A loader like main.ts's: loads, waits for the splash, then starts the match. */
+  const splashLoader = () => {
+    let finishLoading: (() => void) | undefined;
+    const loaded = new Promise<void>((resolve) => { finishLoading = resolve; });
+    const started = vi.fn();
+    const onStartMatch = vi.fn(async (_config: unknown, context: MatchLaunchContext) => {
+      await loaded;
+      await context.waitForSplash?.();
+      if (context.signal.aborted) throw new DOMException("Aborted", "AbortError");
+      started();
+    });
+    return { onStartMatch, started, finishLoading: () => finishLoading?.() };
+  };
+
+  it("shows both fighters on a versus splash, and the match starts only once it has held", async () => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    const loader = splashLoader();
+    const ui = new UIController(root, { onStartMatch: loader.onStartMatch }, { initialFighters: [OPEN_P1, OPEN_P2], versusSplashMs: 1_000 });
+    toVersusSplash(root);
 
     expect(ui.screen).toBe("match-loading");
     const names = [...root.querySelectorAll(".cc-versus__name strong")].map((node) => node.textContent);
     expect(names).toEqual([getFighterDefinition(OPEN_P1).displayName, getFighterDefinition(OPEN_P2).displayName]);
     expect(root.querySelector(".cc-versus__stage strong")?.textContent).toBe(getStageDefinition(DEFAULT_STAGE_ID).displayName);
 
-    resolveLaunch?.();
+    // A fast load: the match must not start behind the splash.
+    loader.finishLoading();
     await vi.advanceTimersByTimeAsync(100);
+    expect(loader.started).not.toHaveBeenCalled();
     expect(ui.screen).toBe("match-loading");
     await vi.advanceTimersByTimeAsync(1_000);
+    expect(loader.started).toHaveBeenCalledTimes(1);
     expect(ui.screen).toBe("gameplay");
+    ui.destroy();
+  });
+
+  it.each([
+    ["Cancel", (root: HTMLElement) => click(root, "[data-ui-action='loading-cancel']")],
+    ["Back", (_root: HTMLElement, ui: UIController) => ui.navigateBack()],
+  ])("never starts the match when %s is pressed on the splash after loading", async (_name, leave) => {
+    const root = document.createElement("div");
+    document.body.append(root);
+    const loader = splashLoader();
+    const ui = new UIController(root, { onStartMatch: loader.onStartMatch }, { initialFighters: [OPEN_P1, OPEN_P2], versusSplashMs: 1_000 });
+    toVersusSplash(root);
+    loader.finishLoading();
+    await vi.advanceTimersByTimeAsync(100);
+
+    leave(root, ui);
+    expect(ui.screen).toBe("stage-select");
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(loader.started).not.toHaveBeenCalled();
+    expect(ui.screen).toBe("stage-select");
     ui.destroy();
   });
 
@@ -132,21 +173,6 @@ describe("Smash-style menus and screens", () => {
       "Damage taken": ["301.5%", "212.3%"],
     });
     expect(root.querySelector(".cc-results__table caption")?.textContent).toContain("1:35");
-    ui.destroy();
-  });
-
-  it("reads falls from the other player's KOs when a result carries KOs only", () => {
-    const root = document.createElement("div");
-    document.body.append(root);
-    const ui = new UIController(root, {}, { initialFighters: [OPEN_P1, OPEN_P2] });
-    toCharacterSelect(root);
-    ui.showResults({ winner: 0, durationMs: 30_000, kos: [3, 1] });
-    const falls = [...root.querySelectorAll(".cc-results__table tbody tr")]
-      .find((row) => row.querySelector("th")?.textContent === "Falls")!;
-    expect([...falls.querySelectorAll("td")].map((cell) => cell.textContent)).toEqual(["1", "3"]);
-    const dealt = [...root.querySelectorAll(".cc-results__table tbody tr")]
-      .find((row) => row.querySelector("th")?.textContent === "Damage dealt")!;
-    expect([...dealt.querySelectorAll("td")].map((cell) => cell.textContent)).toEqual(["—", "—"]);
     ui.destroy();
   });
 });

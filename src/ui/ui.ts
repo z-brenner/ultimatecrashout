@@ -75,6 +75,11 @@ export interface MatchLaunchProgress {
 export interface MatchLaunchContext {
   signal: AbortSignal;
   reportProgress: (progress: MatchLaunchProgress) => void;
+  /**
+   * Resolves once the versus splash has shown for its minimum time (at once
+   * if the launch is cancelled). A loader starts the match only after it.
+   */
+  waitForSplash?: () => Promise<void>;
 }
 
 export interface HUDPlayerState {
@@ -784,6 +789,11 @@ export class UIController extends EventTarget {
     }
     if (this.currentScreen === "home" || this.currentScreen === "gameplay") return;
     this.callbacks.onUiSound?.("back");
+    if (this.currentScreen === "match-loading") {
+      // cancelMatchLaunch plays its own back cue.
+      this.cancelMatchLaunch();
+      return;
+    }
     if (this.currentScreen === "controls" && this.controlsReturn === "settings") this.showSettings();
     else if (this.currentScreen === "stage-select") this.showCharacterSelect();
     else this.showHome();
@@ -902,9 +912,9 @@ export class UIController extends EventTarget {
     const entering = this.currentScreen !== "character-select";
     const ready = this.playerConfirmed.every(Boolean);
     // Both players just locked in: the banner takes focus, as in Smash.
-    const justReady = ready && !(this.readyToFight && !entering);
+    const justReady = ready && !this.readyToFight;
     this.readyToFight = ready;
-    const retainedFocus = entering || justReady ? undefined : this.characterSelectFocusSelector();
+    const retainedFocus = entering ? undefined : this.characterSelectFocusSelector();
     this.renderScreen(
       "character-select",
       `
@@ -940,11 +950,11 @@ export class UIController extends EventTarget {
               </label>
             </div>
             ${ready
-              ? `<div class="cc-fight-button is-ready" aria-hidden="true">
+              ? `<button class="cc-fight-button is-ready" type="button" data-ui-action="open-stage-select" tabindex="-1" aria-hidden="true">
               <span>Next step</span>
               <strong>Stages</strong>
               <small>Current selection: ${escapeHtml(selectedStage.displayName)}</small>
-            </div>`
+            </button>`
               : `<button class="cc-fight-button" type="button" data-ui-action="open-stage-select" aria-disabled="true">
               <span>Confirm P1 and P2</span>
               <strong>Waiting</strong>
@@ -957,8 +967,8 @@ export class UIController extends EventTarget {
             <small>Choose a stage →</small>
           </button>` : ""}
         </section>`,
-      ready && justReady
-        ? "[data-ui-action='open-stage-select']"
+      justReady
+        ? ".cc-ready-banner"
         : retainedFocus ?? `[data-ui-action='pick-fighter'][data-fighter-slot='${this.activePlayer}'][aria-checked='true']`,
     );
     if (justReady && !entering) this.callbacks.onUiSound?.("ready-to-fight");
@@ -1341,16 +1351,14 @@ export class UIController extends EventTarget {
     const timeLabel = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
     const playerLabel = (slot: PlayerSlot): string =>
       this.playerCpu[slot] ? `CPU ${slot + 1}` : this.playerNames[slot];
-    // Older results carry KOs only: each fall is then the other player's KO.
-    const falls = result.falls ?? [result.kos[1], result.kos[0]];
-    const stat = (value: number | undefined, suffix = ""): string =>
-      value === undefined ? "—" : `${Math.round(value * 10) / 10}${suffix}`;
+    const stat = (values: [number, number], suffix = ""): [string, string] =>
+      [`${Math.round(values[0] * 10) / 10}${suffix}`, `${Math.round(values[1] * 10) / 10}${suffix}`];
     const rows: Array<[label: string, values: [string, string]]> = [
-      ["KOs", [stat(result.kos[0]), stat(result.kos[1])]],
-      ["Falls", [stat(falls[0]), stat(falls[1])]],
-      ["Self-destructs", [stat(result.selfDestructs?.[0]), stat(result.selfDestructs?.[1])]],
-      ["Damage dealt", [stat(result.damageDealt?.[0], "%"), stat(result.damageDealt?.[1], "%")]],
-      ["Damage taken", [stat(result.damageTaken?.[0], "%"), stat(result.damageTaken?.[1], "%")]],
+      ["KOs", stat(result.kos)],
+      ["Falls", stat(result.falls)],
+      ["Self-destructs", stat(result.selfDestructs)],
+      ["Damage dealt", stat(result.damageDealt, "%")],
+      ["Damage taken", stat(result.damageTaken, "%")],
     ];
     const head = (slot: PlayerSlot): string => {
       const fighter = fighterById(this.selectedFighters[slot]);
@@ -2010,7 +2018,7 @@ export class UIController extends EventTarget {
     this.showMatchLoading(config);
     const splashShownAt = performance.now();
 
-    const begin = (): void => {
+    const complete = (): void => {
       if (
         this.destroyed ||
         controller.signal.aborted ||
@@ -2021,12 +2029,19 @@ export class UIController extends EventTarget {
       this.emit("startmatch", config);
       this.showHud();
     };
-    // A fast load still lets the versus splash land before the fight.
-    const complete = (): void => {
+    // A fast load still lets the versus splash land before the fight starts.
+    const waitForSplash = (): Promise<void> => new Promise((resolve) => {
       const remaining = this.versusSplashMs - (performance.now() - splashShownAt);
-      if (remaining > 0) window.setTimeout(begin, remaining);
-      else begin();
-    };
+      if (remaining <= 0 || controller.signal.aborted) {
+        resolve();
+        return;
+      }
+      const timer = window.setTimeout(resolve, remaining);
+      controller.signal.addEventListener("abort", () => {
+        window.clearTimeout(timer);
+        resolve();
+      }, { once: true });
+    });
     const fail = (error: unknown): void => {
       if (this.matchLaunch?.generation !== generation) return;
       this.matchLaunch = undefined;
@@ -2042,11 +2057,12 @@ export class UIController extends EventTarget {
         reportProgress: (progress) => {
           if (this.matchLaunch?.generation === generation) this.updateMatchLoading(progress);
         },
+        waitForSplash,
       });
       if (result && typeof result.then === "function") {
         void result.then(complete, fail);
       } else {
-        begin();
+        complete();
       }
     } catch (error) {
       fail(error);

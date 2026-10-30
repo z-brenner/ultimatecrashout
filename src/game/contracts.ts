@@ -97,11 +97,11 @@ export interface MatchResult {
   /** KOs each player scored on the other. */
   kos: [number, number];
   /** Stocks each player lost, however. */
-  falls?: [number, number];
+  falls: [number, number];
   /** Falls with no opponent's hit to credit. */
-  selfDestructs?: [number, number];
+  selfDestructs: [number, number];
   /** Percent each player dealt to the other. */
-  damageDealt?: [number, number];
+  damageDealt: [number, number];
   /** Percent each player took, from any source. */
-  damageTaken?: [number, number];
+  damageTaken: [number, number];
 }

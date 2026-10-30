@@ -54,7 +54,7 @@ test.describe("stage select", () => {
     await page.locator("[data-ui-action='home-play']").click();
     await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='0']").click();
     await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='1']").click();
-    await page.locator("[data-ui-action='open-stage-select']").click();
+    await page.locator(".cc-ready-banner").click();
 
     const cards = page.locator("[data-ui-action='select-stage']");
     const expected = readyStageIds();
@@ -86,7 +86,7 @@ test.describe("local match", () => {
     await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='0']").click();
     await page.locator("[data-ui-action='pick-fighter'][data-fighter='rgs-stick']").click();
     await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='1']").click();
-    await page.locator("[data-ui-action='open-stage-select']").click();
+    await page.locator(".cc-ready-banner").click();
     await page.locator("[data-ui-action='select-stage']").first().click();
     await page.locator("[data-ui-action='stage-confirm']").click();
 
@@ -222,7 +222,7 @@ test.describe("skins", () => {
     await expect(portrait).not.toHaveAttribute("data-skin-portrait", /.*/);
 
     await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='1']").click();
-    await page.locator("[data-ui-action='open-stage-select']").click();
+    await page.locator(".cc-ready-banner").click();
     await page.locator("[data-ui-action='select-stage']").first().click();
     await page.locator("[data-ui-action='stage-confirm']").click();
     await waitForPlaying(page);
@@ -250,7 +250,7 @@ test.describe("stage mechanics", () => {
     await page.locator("[data-ui-action='home-play']").click();
     await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='0']").click();
     await page.locator("[data-ui-action='toggle-player-ready'][data-player-slot='1']").click();
-    await page.locator("[data-ui-action='open-stage-select']").click();
+    await page.locator(".cc-ready-banner").click();
     await page.locator("[data-ui-action='select-stage'][data-stage='crash-course']").click();
     await expect(page.locator("[data-ui-action='toggle-hazards']")).toHaveAttribute("aria-checked", "true");
     await page.locator("[data-ui-action='stage-confirm']").click();
