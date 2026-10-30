@@ -138,7 +138,9 @@ describe("complete local UI flow", () => {
       }
     }
     vi.stubGlobal("Image", VictoryImage);
-    ui.showResults({ winner: 0, durationMs: 65_000, kos: [3, 1] });
+    ui.showResults({
+      winner: 0, durationMs: 65_000, kos: [3, 1], falls: [1, 3], selfDestructs: [0, 0], damageDealt: [300, 120], damageTaken: [120, 300],
+    });
     expect(ui.screen).toBe("results");
     await vi.waitFor(() => {
       expect(victorySources.at(-1)).toBe(
@@ -157,7 +159,9 @@ describe("complete local UI flow", () => {
     expect(onRestart).toHaveBeenCalledTimes(1);
     expect(ui.screen).toBe("gameplay");
 
-    ui.showResults({ winner: 1, durationMs: 20_000, kos: [0, 3] });
+    ui.showResults({
+      winner: 1, durationMs: 20_000, kos: [0, 3], falls: [3, 0], selfDestructs: [0, 0], damageDealt: [40, 290], damageTaken: [290, 40],
+    });
     await vi.waitFor(() => {
       expect(victorySources.at(-1)).toBe(
         `/assets/characters/open/${OPEN_P2}/00/victory.webp?v=clean-animation-4`,

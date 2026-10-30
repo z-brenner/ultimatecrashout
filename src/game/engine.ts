@@ -199,6 +199,19 @@ export const meleeHitScaling = (
   };
 };
 
+const cloneMatchResult = (result: MatchResult): MatchResult => {
+  const pair = (value: [number, number]): [number, number] => [value[0], value[1]];
+  return {
+    winner: result.winner,
+    durationMs: result.durationMs,
+    kos: pair(result.kos),
+    falls: pair(result.falls),
+    selfDestructs: pair(result.selfDestructs),
+    damageDealt: pair(result.damageDealt),
+    damageTaken: pair(result.damageTaken),
+  };
+};
+
 export const defensiveMoveActiveAtFrame = (
   frame: number,
   move: Pick<AttackDefinition, "startup" | "active" | "counters" | "absorbsProjectiles" | "reflectsProjectiles">,
@@ -1266,6 +1279,10 @@ export class CombatGame {
   private suddenDeath = false;
   private readonly timeLimitFrames: number | null;
   private kos: [number, number] = [0, 0];
+  private falls: [number, number] = [0, 0];
+  private selfDestructs: [number, number] = [0, 0];
+  private damageDealt: [number, number] = [0, 0];
+  private damageTaken: [number, number] = [0, 0];
   private nextEntityId = 1;
   private nextItemFrame = Number.POSITIVE_INFINITY;
   private accumulator = 0;
@@ -1398,13 +1415,7 @@ export class CombatGame {
         blastZone: { ...this.stage.blastZone },
       },
       winner: this.winner,
-      result: this.result
-        ? {
-            winner: this.result.winner,
-            durationMs: this.result.durationMs,
-            kos: [...this.result.kos] as [number, number],
-          }
-        : null,
+      result: this.result ? cloneMatchResult(this.result) : null,
       events: this.events.map((event) => ({
         ...event,
         position: event.position ? cloneVec(event.position) : undefined,
@@ -1460,6 +1471,10 @@ export class CombatGame {
     this.result = null;
     this.suddenDeath = false;
     this.kos = [0, 0];
+    this.falls = [0, 0];
+    this.selfDestructs = [0, 0];
+    this.damageDealt = [0, 0];
+    this.damageTaken = [0, 0];
     this.nextEntityId = 1;
     this.projectiles = [];
     this.items = [];
@@ -2603,7 +2618,7 @@ export class CombatGame {
     if (action.frame === Math.max(1, move.startup)) {
       if (move.storesCharge) fighter.storedCharges[action.name] = 0;
       if (move.selfDamage && !action.appliedSelfDamage) {
-        fighter.percent += move.selfDamage;
+        this.addDamage(fighter, move.selfDamage, null);
         action.appliedSelfDamage = true;
       }
       if (move.movement && !move.specialMovement) {
@@ -3739,7 +3754,7 @@ export class CombatGame {
     source: GameEvent["source"],
     origin: { move?: MoveName; item?: ItemKind },
   ): void {
-    target.percent = Math.max(0, target.percent + damage * target.defenseMultiplier);
+    this.addDamage(target, damage * target.defenseMultiplier, attacker);
     attacker.hitstopFrames = Math.max(attacker.hitstopFrames, hitstop);
     target.hitstopFrames = Math.max(target.hitstopFrames, hitstop);
     target.lastHitBy = attacker.slot;
@@ -3963,6 +3978,14 @@ export class CombatGame {
     });
   }
 
+  /** Damage to `target`, credited to `attacker` when another fighter dealt it. */
+  private addDamage(target: FighterRuntime, amount: number, attacker: FighterRuntime | null): void {
+    const dealt = Math.max(0, amount);
+    target.percent += dealt;
+    this.damageTaken[target.slot] += dealt;
+    if (attacker && attacker.slot !== target.slot) this.damageDealt[attacker.slot] += dealt;
+  }
+
   private refreshRecoveryAfterAirHit(target: FighterRuntime): void {
     if (target.grounded) return;
     // A defender knocked out of an aerial resource gets one route back to the
@@ -4095,7 +4118,7 @@ export class CombatGame {
         : 1;
       target.lastHitFrames = 600;
       const damage = move.damage * damageScale * attacker.damageMultiplier;
-      target.percent = Math.max(0, target.percent + damage * target.defenseMultiplier);
+      this.addDamage(target, damage * target.defenseMultiplier, attacker);
       attacker.hitstopFrames = Math.max(attacker.hitstopFrames, move.hitstop);
       target.hitstopFrames = Math.max(target.hitstopFrames, move.hitstop + 1);
       this.emit({
@@ -4362,7 +4385,7 @@ export class CombatGame {
       target.statusEffect = null;
     }
     const effectiveDamage = damage * target.defenseMultiplier;
-    target.percent = Math.max(0, target.percent + effectiveDamage);
+    this.addDamage(target, effectiveDamage, attacker);
     const knockback = Math.max(
       minimumKnockback,
       calculateMeleeKnockback({
@@ -5269,7 +5292,7 @@ export class CombatGame {
         return false;
       case "bury":
         this.refreshRecoveryAfterAirHit(target);
-        target.percent += definition.amount * target.defenseMultiplier;
+        this.addDamage(target, definition.amount * target.defenseMultiplier, attacker);
         target.velocity = { x: 0, y: 0 };
         this.clearLaunchVelocity(target);
         target.state = "hitstun";
@@ -5281,7 +5304,7 @@ export class CombatGame {
         break;
       case "stun":
         this.refreshRecoveryAfterAirHit(target);
-        target.percent += definition.amount * target.defenseMultiplier;
+        this.addDamage(target, definition.amount * target.defenseMultiplier, attacker);
         target.velocity = { x: 0, y: 0 };
         this.clearLaunchVelocity(target);
         target.state = "hitstun";
@@ -5330,8 +5353,11 @@ export class CombatGame {
       const koVelocity = this.fighterWorldVelocity(fighter);
       this.releaseGrabRelations(fighter);
       fighter.stocks = Math.max(0, fighter.stocks - 1);
+      this.falls[fighter.slot] += 1;
       if (fighter.lastHitBy !== null && fighter.lastHitBy !== fighter.slot) {
         this.kos[fighter.lastHitBy] += 1;
+      } else {
+        this.selfDestructs[fighter.slot] += 1;
       }
       fighter.state = "ko";
       fighter.respawnFrames = 90;
@@ -5534,6 +5560,10 @@ export class CombatGame {
       winner,
       durationMs: Math.max(0, (this.frame - this.options.countdownFrames) * FIXED_DT_MS),
       kos: [...this.kos] as [number, number],
+      falls: [...this.falls] as [number, number],
+      selfDestructs: [...this.selfDestructs] as [number, number],
+      damageDealt: [...this.damageDealt] as [number, number],
+      damageTaken: [...this.damageTaken] as [number, number],
     };
     this.emit({
       type: "match-end",

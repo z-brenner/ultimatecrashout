@@ -94,5 +94,14 @@ export interface MatchConfig {
 export interface MatchResult {
   winner: PlayerSlot;
   durationMs: number;
+  /** KOs each player scored on the other. */
   kos: [number, number];
+  /** Stocks each player lost, however. */
+  falls: [number, number];
+  /** Falls with no opponent's hit to credit. */
+  selfDestructs: [number, number];
+  /** Percent each player dealt to the other. */
+  damageDealt: [number, number];
+  /** Percent each player took, from any source. */
+  damageTaken: [number, number];
 }

@@ -14,6 +14,7 @@ import { GamepadMenuNavigation } from "./ui/gamepadNavigation";
 import { CharacterSelectCursors } from "./ui/characterSelectCursors";
 import {
   UIController,
+  VERSUS_SPLASH_MS,
   type MatchLaunchContext,
   type UIScreen,
 } from "./ui/ui";
@@ -221,6 +222,11 @@ const startMatch = async (
   if (context.signal.aborted) {
     throw context.signal.reason ?? new DOMException("Aborted", "AbortError");
   }
+  // The fight starts only once the versus splash has had its moment.
+  await context.waitForSplash?.();
+  if (context.signal.aborted) {
+    throw context.signal.reason ?? new DOMException("Aborted", "AbortError");
+  }
   activateMatch(config, activeRenderer);
 };
 
@@ -282,10 +288,11 @@ const ui = new UIController(
     onUiSound: (cue) => {
       if (cue === "focus") audio.menuMove();
       else if (cue === "back") audio.menuBack();
+      else if (cue === "ready-to-fight") audio.ready();
       else audio.menuConfirm();
     },
   },
-  { settings, gamepads },
+  { settings, gamepads, versusSplashMs: VERSUS_SPLASH_MS },
 );
 
 const menuNavigation = new GamepadMenuNavigation(root, {
