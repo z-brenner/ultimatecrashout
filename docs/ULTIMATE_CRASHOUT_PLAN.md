@@ -158,6 +158,11 @@ Ordered by how much they constrain the goals.
    (no shield damage, the attacker freezes 12 frames longer); jump out of
    shield; jump + attack together for a short-hop aerial, and every aerial
    during a short hop deals 0.85× damage.
+5. ~~Menus and screens~~ (done): a READY TO FIGHT banner sweeps across
+   character select when both players lock in; a versus splash (fighters
+   squared up, stage and load progress) holds at least 1.2 s while the match
+   loads; results rank both players with KOs, falls, self-destructs and
+   damage dealt and taken beside the winner's victory pose.
 
 ### Phase 4 — online (speculative)
 

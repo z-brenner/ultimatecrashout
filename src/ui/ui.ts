@@ -64,7 +64,7 @@ export type UIScreen =
   | "gameplay"
   | "results";
 
-export type UISoundCue = "focus" | "confirm" | "back";
+export type UISoundCue = "focus" | "confirm" | "back" | "ready-to-fight";
 
 export interface MatchLaunchProgress {
   completed: number;
@@ -112,7 +112,12 @@ export interface UIControllerOptions {
   settings?: Partial<GameSettings>;
   initialFighters?: [FighterId, FighterId];
   gamepads?: GamepadUiAdapter;
+  /** The versus splash stays at least this long while a match loads (ms). */
+  versusSplashMs?: number;
 }
+
+/** How long the versus splash holds, at least, before a loaded match starts. */
+export const VERSUS_SPLASH_MS = 1_200;
 
 export interface UIControllerEventMap {
   screenchange: UIScreen;
@@ -417,6 +422,9 @@ export class UIController extends EventTarget {
   private labLoadGeneration = 0;
   private victoryAnimationFrame?: number;
   private victoryLoadGeneration = 0;
+  /** Both players were locked in on the last character-select render. */
+  private readyToFight = false;
+  private readonly versusSplashMs: number;
   private matchLaunchGeneration = 0;
   private matchLaunch?: { controller: AbortController; generation: number };
   private keyboardFocusSound = false;
@@ -434,6 +442,7 @@ export class UIController extends EventTarget {
     this.root = root;
     this.callbacks = callbacks;
     this.selectedFighters = options.initialFighters ?? DEFAULT_FIGHTERS;
+    this.versusSplashMs = Math.max(0, options.versusSplashMs ?? 0);
     this.avoidMirrorSkin(1);
 
     const suppliedBindings = options.settings?.bindings;
@@ -891,7 +900,11 @@ export class UIController extends EventTarget {
       ? "No time limit"
       : `${Math.round(this.timeLimitSeconds / 60)} minute${this.timeLimitSeconds === 60 ? "" : "s"}`;
     const entering = this.currentScreen !== "character-select";
-    const retainedFocus = entering ? undefined : this.characterSelectFocusSelector();
+    const ready = this.playerConfirmed.every(Boolean);
+    // Both players just locked in: the banner takes focus, as in Smash.
+    const justReady = ready && !(this.readyToFight && !entering);
+    this.readyToFight = ready;
+    const retainedFocus = entering || justReady ? undefined : this.characterSelectFocusSelector();
     this.renderScreen(
       "character-select",
       `
@@ -926,15 +939,29 @@ export class UIController extends EventTarget {
                 </select>
               </label>
             </div>
-            <button class="cc-fight-button${this.playerConfirmed.every(Boolean) ? " is-ready" : ""}" type="button" data-ui-action="open-stage-select" aria-disabled="${!this.playerConfirmed.every(Boolean)}">
-              <span>${this.playerConfirmed.every(Boolean) ? "Next step" : "Confirm P1 and P2"}</span>
-              <strong>${this.playerConfirmed.every(Boolean) ? "Stages" : "Waiting"}</strong>
-              <small>${this.playerConfirmed.every(Boolean) ? `Current selection: ${escapeHtml(selectedStage.displayName)}` : "Duplicate fighters are allowed"}</small>
-            </button>
+            ${ready
+              ? `<div class="cc-fight-button is-ready" aria-hidden="true">
+              <span>Next step</span>
+              <strong>Stages</strong>
+              <small>Current selection: ${escapeHtml(selectedStage.displayName)}</small>
+            </div>`
+              : `<button class="cc-fight-button" type="button" data-ui-action="open-stage-select" aria-disabled="true">
+              <span>Confirm P1 and P2</span>
+              <strong>Waiting</strong>
+              <small>Duplicate fighters are allowed</small>
+            </button>`}
           </div>
+          ${ready ? `
+          <button class="cc-ready-banner${justReady ? " is-entering" : ""}" type="button" data-ui-action="open-stage-select">
+            <span class="cc-ready-banner__text">Ready to fight</span>
+            <small>Choose a stage →</small>
+          </button>` : ""}
         </section>`,
-      retainedFocus ?? `[data-ui-action='pick-fighter'][data-fighter-slot='${this.activePlayer}'][aria-checked='true']`,
+      ready && justReady
+        ? "[data-ui-action='open-stage-select']"
+        : retainedFocus ?? `[data-ui-action='pick-fighter'][data-fighter-slot='${this.activePlayer}'][aria-checked='true']`,
     );
+    if (justReady && !entering) this.callbacks.onUiSound?.("ready-to-fight");
   }
 
   showStageSelect(): void {
@@ -990,29 +1017,40 @@ export class UIController extends EventTarget {
     );
   }
 
+  /** The versus splash shown while the match loads: both fighters squared up, Smash-style. */
   private showMatchLoading(config: MatchConfig): void {
-    const first = fighterById(config.players[0].fighter);
-    const second = fighterById(config.players[1].fighter);
     const stage = getStageDefinition(config.stage);
+    const side = (slot: PlayerSlot): string => {
+      const player = config.players[slot];
+      const fighter = fighterById(player.fighter);
+      const label = player.cpu ? `CPU • Level ${player.cpuLevel}` : player.name;
+      return `
+        <article class="cc-versus__side cc-versus__side--p${slot + 1}">
+          <div class="cc-versus__fighter">${portraitMarkup(fighter.id, false, player.skin)}</div>
+          <div class="cc-versus__name">
+            <small>P${slot + 1} • ${escapeHtml(label)}</small>
+            <strong>${escapeHtml(fighter.name)}</strong>
+            <span>${escapeHtml(fighter.epithet)}</span>
+          </div>
+        </article>`;
+    };
     this.renderScreen(
       "match-loading",
       `
-        <section class="cc-match-loading cc-enter" aria-labelledby="cc-match-loading-title" aria-busy="true">
-          <div class="cc-match-loading__flare" aria-hidden="true"></div>
-          <span class="cc-match-loading__eyebrow">Optimized local setup</span>
-          <h1 id="cc-match-loading-title">Loading battle</h1>
-          <div class="cc-match-loading__versus">
-            <article>${portraitMarkup(first.id, false, config.players[0].skin)}<strong>${escapeHtml(first.name)}</strong><small>Player 1</small></article>
-            <b aria-hidden="true">VS</b>
-            <article>${portraitMarkup(second.id, false, config.players[1].skin)}<strong>${escapeHtml(second.name)}</strong><small>Player 2</small></article>
-          </div>
-          <div class="cc-match-loading__status" role="status" aria-live="polite">
-            <span data-match-loading-label>Starting the engine…</span>
-            <strong data-match-loading-percent>0%</strong>
-          </div>
-          <div class="cc-match-loading__track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-match-loading-progress><i></i></div>
-          <p>${escapeHtml(stage.displayName)} • only the two selected fighters and this stage are loaded</p>
-          <button class="cc-text-button" type="button" data-ui-action="loading-cancel">Cancel</button>
+        <section class="cc-match-loading cc-versus cc-enter" aria-labelledby="cc-match-loading-title" aria-busy="true">
+          <h1 id="cc-match-loading-title" class="cc-visually-hidden">${escapeHtml(fighterById(config.players[0].fighter).name)} versus ${escapeHtml(fighterById(config.players[1].fighter).name)}</h1>
+          ${side(0)}
+          ${side(1)}
+          <b class="cc-versus__vs" aria-hidden="true">VS</b>
+          <footer class="cc-versus__footer">
+            <span class="cc-versus__stage"><small>Stage</small><strong>${escapeHtml(stage.displayName)}</strong><em>${config.stocks} stock${config.stocks === 1 ? "" : "s"}</em></span>
+            <div class="cc-match-loading__status" role="status" aria-live="polite">
+              <span data-match-loading-label>Starting the engine…</span>
+              <strong data-match-loading-percent>0%</strong>
+            </div>
+            <div class="cc-match-loading__track" role="progressbar" aria-label="Loading the battle" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-match-loading-progress><i></i></div>
+            <button class="cc-text-button" type="button" data-ui-action="loading-cancel">Cancel</button>
+          </footer>
         </section>`,
       "[data-ui-action='loading-cancel']",
     );
@@ -1299,28 +1337,56 @@ export class UIController extends EventTarget {
     this.hidePause(false);
     const winnerSlot = result.winner;
     const winner = fighterById(this.selectedFighters[winnerSlot]);
-    const loserSlot: PlayerSlot = winnerSlot === 0 ? 1 : 0;
     const seconds = Math.max(0, Math.round(result.durationMs / 1000));
-    const minutesLabel = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+    const timeLabel = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+    const playerLabel = (slot: PlayerSlot): string =>
+      this.playerCpu[slot] ? `CPU ${slot + 1}` : this.playerNames[slot];
+    // Older results carry KOs only: each fall is then the other player's KO.
+    const falls = result.falls ?? [result.kos[1], result.kos[0]];
+    const stat = (value: number | undefined, suffix = ""): string =>
+      value === undefined ? "—" : `${Math.round(value * 10) / 10}${suffix}`;
+    const rows: Array<[label: string, values: [string, string]]> = [
+      ["KOs", [stat(result.kos[0]), stat(result.kos[1])]],
+      ["Falls", [stat(falls[0]), stat(falls[1])]],
+      ["Self-destructs", [stat(result.selfDestructs?.[0]), stat(result.selfDestructs?.[1])]],
+      ["Damage dealt", [stat(result.damageDealt?.[0], "%"), stat(result.damageDealt?.[1], "%")]],
+      ["Damage taken", [stat(result.damageTaken?.[0], "%"), stat(result.damageTaken?.[1], "%")]],
+    ];
+    const head = (slot: PlayerSlot): string => {
+      const fighter = fighterById(this.selectedFighters[slot]);
+      const place = slot === winnerSlot ? 1 : 2;
+      return `
+        <th scope="col" class="cc-results__player cc-results__player--p${slot + 1}${slot === winnerSlot ? " is-winner" : ""}">
+          <span class="cc-results__player-portrait">${portraitMarkup(fighter.id, false, this.selectedSkins[slot])}</span>
+          <b class="cc-results__player-place" aria-label="Place ${place}">${place}</b>
+          <strong>${escapeHtml(fighter.name)}</strong>
+          <small>P${slot + 1} • ${escapeHtml(playerLabel(slot))}</small>
+        </th>`;
+    };
     this.renderScreen(
       "results",
       `
         <section class="cc-results cc-enter cc-results--p${winnerSlot + 1}" aria-labelledby="cc-result-title">
-          <div class="cc-results__flare" aria-hidden="true"></div>
-          <div class="cc-results__portrait">
-            <canvas class="cc-results__victory-pose" width="512" height="512" data-victory-canvas role="img" aria-label="Animated victory pose for ${winner.name}"></canvas>
-            <span class="cc-results__victory-fallback" data-victory-fallback>${portraitMarkup(winner.id, false, this.selectedSkins[winnerSlot])}</span>
-            <span class="cc-results__win-band">Victory</span>
+          <div class="cc-results__stage">
+            <div class="cc-results__burst" aria-hidden="true"></div>
+            <div class="cc-results__portrait">
+              <canvas class="cc-results__victory-pose" width="512" height="512" data-victory-canvas role="img" aria-label="Animated victory pose for ${winner.name}"></canvas>
+              <span class="cc-results__victory-fallback" data-victory-fallback>${portraitMarkup(winner.id, false, this.selectedSkins[winnerSlot])}</span>
+            </div>
+            <div class="cc-results__headline">
+              <span class="cc-results__place" aria-hidden="true">1</span>
+              <span class="cc-results__eyebrow">P${winnerSlot + 1} • ${escapeHtml(playerLabel(winnerSlot))}</span>
+              <h1 id="cc-result-title">${escapeHtml(winner.name)}<em>wins!</em></h1>
+            </div>
           </div>
-          <div class="cc-results__copy">
-            <span class="cc-results__place" aria-hidden="true">1</span>
-            <span class="cc-results__eyebrow">Victory • ${escapeHtml(this.playerCpu[winnerSlot] ? `CPU ${winnerSlot + 1}` : this.playerNames[winnerSlot])}</span>
-            <h1 id="cc-result-title">${winner.name}<br><em>wins the clash</em></h1>
-            <dl class="cc-scoreboard">
-              <div><dt>K.-O.</dt><dd>${result.kos[winnerSlot]}</dd></div>
-              <div><dt>Falls</dt><dd>${result.kos[loserSlot]}</dd></div>
-              <div><dt>Time</dt><dd>${minutesLabel}</dd></div>
-            </dl>
+          <div class="cc-results__panel">
+            <table class="cc-results__table">
+              <caption>Match results • time ${timeLabel}</caption>
+              <thead><tr><td></td>${head(0)}${head(1)}</tr></thead>
+              <tbody>
+                ${rows.map(([label, values]) => `<tr><th scope="row">${label}</th><td>${values[0]}</td><td>${values[1]}</td></tr>`).join("")}
+              </tbody>
+            </table>
             <div class="cc-results__actions">
               <button class="cc-fight-button" type="button" data-ui-action="result-rematch"><span>Same rules</span><strong>Rematch</strong></button>
               <button class="cc-wide-action" type="button" data-ui-action="result-select"><span><strong>Change fighters</strong></span><b aria-hidden="true">→</b></button>
@@ -1330,6 +1396,8 @@ export class UIController extends EventTarget {
         </section>`,
       "[data-ui-action='result-rematch']",
     );
+    const table = this.screenRoot.querySelector<HTMLElement>(".cc-results__table");
+    if (table) focusPortraits(table);
     this.startVictoryAnimation(winner.id, this.selectedSkins[winnerSlot]);
   }
 
@@ -1940,8 +2008,9 @@ export class UIController extends EventTarget {
     const controller = new AbortController();
     this.matchLaunch = { controller, generation };
     this.showMatchLoading(config);
+    const splashShownAt = performance.now();
 
-    const complete = (): void => {
+    const begin = (): void => {
       if (
         this.destroyed ||
         controller.signal.aborted ||
@@ -1951,6 +2020,12 @@ export class UIController extends EventTarget {
       this.lastMatchConfig = config;
       this.emit("startmatch", config);
       this.showHud();
+    };
+    // A fast load still lets the versus splash land before the fight.
+    const complete = (): void => {
+      const remaining = this.versusSplashMs - (performance.now() - splashShownAt);
+      if (remaining > 0) window.setTimeout(begin, remaining);
+      else begin();
     };
     const fail = (error: unknown): void => {
       if (this.matchLaunch?.generation !== generation) return;
@@ -1971,7 +2046,7 @@ export class UIController extends EventTarget {
       if (result && typeof result.then === "function") {
         void result.then(complete, fail);
       } else {
-        complete();
+        begin();
       }
     } catch (error) {
       fail(error);
